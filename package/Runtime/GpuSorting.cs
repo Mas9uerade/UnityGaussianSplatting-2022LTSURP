@@ -34,6 +34,7 @@ namespace GaussianSplatting.Runtime
             public uint             count;
             public GraphicsBuffer   inputKeys;
             public GraphicsBuffer   inputValues;
+            public GraphicsBuffer   countBuffer; // sorted count, read by the sort kernels from the GPU
             public SupportResources resources;
             internal int workGroupCount;
         }
@@ -167,6 +168,10 @@ namespace GaussianSplatting.Runtime
             //Downsweep
             cmd.SetComputeBufferParam(m_CS, m_kernelDownsweep, "b_passHist", args.resources.passHistBuffer);
             cmd.SetComputeBufferParam(m_CS, m_kernelDownsweep, "b_globalHist", args.resources.globalHistBuffer);
+
+            // Actual key count (can differ from args.count when only a subset is sorted)
+            cmd.SetComputeBufferParam(m_CS, m_kernelUpsweep, "_VisibleSplatCount", args.countBuffer);
+            cmd.SetComputeBufferParam(m_CS, m_kernelDownsweep, "_VisibleSplatCount", args.countBuffer);
 
             //Clear the global histogram
             cmd.SetComputeBufferParam(m_CS, m_kernelInitDeviceRadixSort, "b_globalHist", args.resources.globalHistBuffer);

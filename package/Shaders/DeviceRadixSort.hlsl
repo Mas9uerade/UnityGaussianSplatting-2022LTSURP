@@ -52,8 +52,10 @@ void InitDeviceRadixSort(int3 id : SV_DispatchThreadID)
 inline void HistogramDigitCounts(uint gtid, uint gid)
 {
     const uint histOffset = gtid / 64 * RADIX;
-    const uint partitionEnd = gid == e_threadBlocks - 1 ?
-        e_numKeys : (gid + 1) * PART_SIZE;
+    // actual count comes from the GPU buffer, so the sort can be dispatched with
+    // a conservative (full size) threadblock count; every block clamps to it
+    const uint numKeys = _VisibleSplatCount[0];
+    const uint partitionEnd = min((gid + 1) * PART_SIZE, numKeys);
     for (uint i = gtid + gid * PART_SIZE; i < partitionEnd; i += US_DIM)
     {
 #if defined(KEY_UINT)
@@ -454,11 +456,17 @@ void Downsweep(uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
     KeyStruct keys;
     OffsetStruct offsets;
     const uint waveSize = getWaveSize();
+
+    const uint numKeys = _VisibleSplatCount[0];
+    const uint blockStart = gid.x * PART_SIZE;
+    if (blockStart >= numKeys)
+        return; // threadblocks beyond the actual sorted count have nothing to do
+    const bool lastUsedBlock = blockStart + PART_SIZE >= numKeys;
     
     ClearWaveHists(gtid.x, waveSize);
     GroupMemoryBarrierWithGroupSync();
     
-    if (gid.x < e_threadBlocks - 1)
+    if (!lastUsedBlock)
     {
         if (waveSize >= 16)
             keys = LoadKeysWGE16(gtid.x, waveSize, gid.x);
@@ -467,7 +475,7 @@ void Downsweep(uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
             keys = LoadKeysWLT16(gtid.x, waveSize, gid.x, SerialIterations(waveSize));
     }
         
-    if (gid.x == e_threadBlocks - 1)
+    if (lastUsedBlock)
     {
         if (waveSize >= 16)
             keys = LoadKeysPartialWGE16(gtid.x, waveSize, gid.x);
@@ -523,9 +531,9 @@ void Downsweep(uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
     LoadThreadBlockReductions(gtid.x, gid.x, exclusiveHistReduction);
     GroupMemoryBarrierWithGroupSync();
     
-    if (gid.x < e_threadBlocks - 1)
+    if (!lastUsedBlock)
         ScatterDevice(gtid.x, waveSize, gid.x, offsets);
         
-    if (gid.x == e_threadBlocks - 1)
+    if (lastUsedBlock)
         ScatterDevicePartial(gtid.x, waveSize, gid.x, offsets);
 }

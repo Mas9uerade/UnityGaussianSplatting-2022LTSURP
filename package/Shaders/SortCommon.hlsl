@@ -275,12 +275,13 @@ inline KeyStruct LoadKeysWLT16(uint gtid, uint waveSize, uint partIndex, uint se
 inline KeyStruct LoadKeysPartialWGE16(uint gtid, uint waveSize, uint partIndex)
 {
     KeyStruct keys;
+    const uint numKeys = _VisibleSplatCount[0];
     [unroll]
     for (uint i = 0, t = DeviceOffsetWGE16(gtid, waveSize, partIndex);
         i < KEYS_PER_THREAD;
         ++i, t += waveSize)
     {
-        if (t < e_numKeys)
+        if (t < numKeys)
             LoadKey(keys.k[i], t);
         else
             LoadDummyKey(keys.k[i]);
@@ -291,12 +292,13 @@ inline KeyStruct LoadKeysPartialWGE16(uint gtid, uint waveSize, uint partIndex)
 inline KeyStruct LoadKeysPartialWLT16(uint gtid, uint waveSize, uint partIndex, uint serialIterations)
 {
     KeyStruct keys;
+    const uint numKeys = _VisibleSplatCount[0];
     [unroll]
     for (uint i = 0, t = DeviceOffsetWLT16(gtid, waveSize, partIndex, serialIterations);
         i < KEYS_PER_THREAD;
         ++i, t += waveSize * serialIterations)
     {
-        if (t < e_numKeys)
+        if (t < numKeys)
             LoadKey(keys.k[i], t);
         else
             LoadDummyKey(keys.k[i]);
@@ -565,7 +567,7 @@ inline void ScatterKeysShared(OffsetStruct offsets, KeyStruct keys)
 
 inline uint DescendingIndex(uint deviceIndex)
 {
-    return e_numKeys - deviceIndex - 1;
+    return _VisibleSplatCount[0] - deviceIndex - 1;
 }
 
 inline void WriteKey(uint deviceIndex, uint groupSharedIndex)
@@ -797,7 +799,7 @@ inline void ScatterKeysOnlyDevicePartialDescending(uint gtid, uint finalPartSize
 
 inline void ScatterKeysOnlyDevicePartial(uint gtid, uint partIndex)
 {
-    const uint finalPartSize = e_numKeys - partIndex * PART_SIZE;
+    const uint finalPartSize = _VisibleSplatCount[0] - partIndex * PART_SIZE;
 #if defined(SHOULD_ASCEND)
     ScatterKeysOnlyDevicePartialAscending(gtid, finalPartSize);
 #else
@@ -851,12 +853,13 @@ inline void LoadPayloadsPartialWGE16(
     uint partIndex,
     inout KeyStruct payloads)
 {
+    const uint numKeys = _VisibleSplatCount[0];
     [unroll]
     for (uint i = 0, t = DeviceOffsetWGE16(gtid, waveSize, partIndex);
         i < KEYS_PER_THREAD;
         ++i, t += waveSize)
     {
-        if (t < e_numKeys)
+        if (t < numKeys)
             LoadPayload(payloads.k[i], t);
     }
 }
@@ -868,12 +871,13 @@ inline void LoadPayloadsPartialWLT16(
     uint serialIterations,
     inout KeyStruct payloads)
 {
+    const uint numKeys = _VisibleSplatCount[0];
     [unroll]
     for (uint i = 0, t = DeviceOffsetWLT16(gtid, waveSize, partIndex, serialIterations);
         i < KEYS_PER_THREAD;
         ++i, t += waveSize * serialIterations)
     {
-        if (t < e_numKeys)
+        if (t < numKeys)
             LoadPayload(payloads.k[i], t);
     }
 }
@@ -918,7 +922,7 @@ inline void ScatterPairsDevicePartial(
     OffsetStruct offsets)
 {
     DigitStruct digits;
-    const uint finalPartSize = e_numKeys - partIndex * PART_SIZE;
+    const uint finalPartSize = _VisibleSplatCount[0] - partIndex * PART_SIZE;
 #if defined(SHOULD_ASCEND)
     ScatterPairsKeyPhaseAscendingPartial(gtid, finalPartSize, digits);
 #else

@@ -50,9 +50,15 @@ v2f vert (uint vtxID : SV_VertexID, uint instID : SV_InstanceID)
 		o.col.b = f16tof32(view.color.y >> 16);
 		o.col.a = f16tof32(view.color.y);
 
-		uint idx = vtxID;
-		float2 quadPos = float2(idx&1, (idx>>1)&1) * 2.0 - 1.0;
-		quadPos *= 2;
+		// 6 sequential vertices per quad (2 triangles), so it can be drawn via
+		// DrawProceduralIndirect without an index buffer. Same result as the old
+		// index buffer (0,1,2,1,3,2) mapping.
+		float2 quadPos;
+		uint v = vtxID;
+		if (v == 0) quadPos = float2(-2, -2);
+		else if (v == 1 || v == 3) quadPos = float2(2, -2);
+		else if (v == 2 || v == 5) quadPos = float2(-2, 2);
+		else quadPos = float2(2, 2);
 
 		o.pos = quadPos;
 
