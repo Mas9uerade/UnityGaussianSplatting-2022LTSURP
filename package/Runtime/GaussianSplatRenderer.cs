@@ -117,7 +117,9 @@ namespace GaussianSplatting.Runtime
 
                 // sort
                 var matrix = gs.transform.localToWorldMatrix;
-                if (gs.m_FrameCounter % gs.m_SortNthFrame == 0)
+                bool cutoutsChanged = gs.UpdateCutoutsBuffer();
+                bool needSplatUpdate = gs.NeedsSplatUpdate(cam, matrix, cutoutsChanged);
+                if (needSplatUpdate || (gs.m_SortNthFrame > 1 && gs.m_FrameCounter % gs.m_SortNthFrame == 0))
                     gs.SortPoints(cmb, cam, matrix);
                 ++gs.m_FrameCounter;
 
@@ -149,8 +151,10 @@ namespace GaussianSplatting.Runtime
                 mpb.SetInteger(GaussianSplatRenderer.Props.DisplayChunks, gs.m_RenderMode == GaussianSplatRenderer.RenderMode.DebugChunkBounds ? 1 : 0);
 
                 cmb.BeginSample(s_ProfCalcView);
-                gs.CalcViewData(cmb, cam);
+                if (needSplatUpdate)
+                    gs.CalcViewData(cmb, cam);
                 cmb.EndSample(s_ProfCalcView);
+                gs.MarkSplatUpdateDone(cam, matrix);
 
                 // draw
                 int indexCount = 6;
@@ -284,6 +288,24 @@ namespace GaussianSplatting.Runtime
         Hash128 m_PrevHash;
         bool m_Registered;
 
+        // per-frame GPU work gating: skip sort / view data recompute when nothing relevant changed
+        int m_EditVersion;
+        int m_LastFrameEditVersion = -1;
+        Matrix4x4 m_LastFrameViewMatrix;
+        Matrix4x4 m_LastFrameObjectMatrix;
+        Matrix4x4 m_LastFrameProjectionMatrix;
+        int m_LastFrameScreenW = -1, m_LastFrameScreenH = -1;
+        int m_LastFrameEyeW = -1, m_LastFrameEyeH = -1;
+        float m_LastFrameSplatScale = float.NaN;
+        float m_LastFrameOpacityScale = float.NaN;
+        int m_LastFrameSHOrder = -1;
+        bool m_LastFrameSHOnly;
+        int m_LastFrameRenderMode = -1;
+        bool m_FirstFrame = true;
+        uint m_CalcViewGroupSizeX;
+        uint m_CalcDistancesGroupSizeX;
+        GaussianCutout.ShaderData[] m_CutoutDataCache;
+
         static readonly ProfilerMarker s_ProfSort = new(ProfilerCategory.Render, "GaussianSplat.Sort", MarkerFlags.SampleGPU);
 
         internal static class Props
@@ -330,7 +352,17 @@ namespace GaussianSplatting.Runtime
             public static readonly int SplatOtherMouseDown = Shader.PropertyToID("_SplatOtherMouseDown");
         }
 
-        [field: NonSerialized] public bool editModified { get; private set; }
+        bool m_EditModified;
+        public bool editModified
+        {
+            get => m_EditModified;
+            private set
+            {
+                if (value)
+                    ++m_EditVersion; // bump so per-frame GPU work gating detects the change
+                m_EditModified = value;
+            }
+        }
         [field: NonSerialized] public uint editSelectedSplats { get; private set; }
         [field: NonSerialized] public uint editDeletedSplats { get; private set; }
         [field: NonSerialized] public uint editCutSplats { get; private set; }
@@ -375,6 +407,7 @@ namespace GaussianSplatting.Runtime
             if (!HasValidAsset)
                 return;
 
+            m_FirstFrame = true;
             m_SplatCount = asset.splatCount;
             m_GpuPosData = new GraphicsBuffer(GraphicsBuffer.Target.Raw | GraphicsBuffer.Target.CopySource, (int) (asset.posData.dataSize / 4), 4) { name = "GaussianPosData" };
             m_GpuPosData.SetData(asset.posData.GetData<uint>());
@@ -475,6 +508,7 @@ namespace GaussianSplatting.Runtime
         public void OnEnable()
         {
             m_FrameCounter = 0;
+            m_FirstFrame = true;
             if (!resourcesAreSetUp)
                 return;
 
@@ -533,6 +567,7 @@ namespace GaussianSplatting.Runtime
         void DisposeResourcesForAsset()
         {
             DestroyImmediate(m_GpuColorData);
+            m_FirstFrame = true;
 
             DisposeBuffer(ref m_GpuPosData);
             DisposeBuffer(ref m_GpuOtherData);
@@ -605,8 +640,8 @@ namespace GaussianSplatting.Runtime
             cmb.SetComputeIntParam(m_CSSplatUtilities, Props.SHOrder, m_SHOrder);
             cmb.SetComputeIntParam(m_CSSplatUtilities, Props.SHOnly, m_SHOnly ? 1 : 0);
 
-            m_CSSplatUtilities.GetKernelThreadGroupSizes((int)KernelIndices.CalcViewData, out uint gsX, out _, out _);
-            cmb.DispatchCompute(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, (m_GpuView.count + (int)gsX - 1)/(int)gsX, 1, 1);
+            EnsureKernelSizes();
+            cmb.DispatchCompute(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, (m_GpuView.count + (int)m_CalcViewGroupSizeX - 1)/(int)m_CalcViewGroupSizeX, 1, 1);
         }
 
         internal void SortPoints(CommandBuffer cmd, Camera cam, Matrix4x4 matrix)
@@ -629,13 +664,66 @@ namespace GaussianSplatting.Runtime
             cmd.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixMV, worldToCamMatrix * matrix);
             cmd.SetComputeIntParam(m_CSSplatUtilities, Props.SplatCount, m_SplatCount);
             cmd.SetComputeIntParam(m_CSSplatUtilities, Props.SplatChunkCount, m_GpuChunksValid ? m_GpuChunks.count : 0);
-            m_CSSplatUtilities.GetKernelThreadGroupSizes((int)KernelIndices.CalcDistances, out uint gsX, out _, out _);
-            cmd.DispatchCompute(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, (m_GpuSortDistances.count + (int)gsX - 1)/(int)gsX, 1, 1);
+            EnsureKernelSizes();
+            cmd.DispatchCompute(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, (m_GpuSortDistances.count + (int)m_CalcDistancesGroupSizeX - 1)/(int)m_CalcDistancesGroupSizeX, 1, 1);
 
             // sort the splats
             EnsureSorterAndRegister();
             m_Sorter.Dispatch(cmd, m_SorterArgs);
             cmd.EndSample(s_ProfSort);
+        }
+
+        void EnsureKernelSizes()
+        {
+            if (m_CalcViewGroupSizeX != 0 || m_CSSplatUtilities == null)
+                return;
+            m_CSSplatUtilities.GetKernelThreadGroupSizes((int)KernelIndices.CalcViewData, out m_CalcViewGroupSizeX, out _, out _);
+            m_CSSplatUtilities.GetKernelThreadGroupSizes((int)KernelIndices.CalcDistances, out m_CalcDistancesGroupSizeX, out _, out _);
+        }
+
+        // Returns true when the per-frame GPU work (sorting + view data) needs to be redone for this camera/object state.
+        // When false, the previously computed sort order and view data buffers remain valid and can be reused as-is.
+        internal bool NeedsSplatUpdate(Camera cam, Matrix4x4 matrix, bool cutoutsChanged)
+        {
+            if (m_FirstFrame || cutoutsChanged)
+                return true;
+            if (cam.worldToCameraMatrix != m_LastFrameViewMatrix ||
+                cam.projectionMatrix != m_LastFrameProjectionMatrix ||
+                matrix != m_LastFrameObjectMatrix)
+                return true;
+
+            int screenW = cam.pixelWidth, screenH = cam.pixelHeight;
+            int eyeW = XRSettings.eyeTextureWidth, eyeH = XRSettings.eyeTextureHeight;
+            if (screenW != m_LastFrameScreenW || screenH != m_LastFrameScreenH ||
+                eyeW != m_LastFrameEyeW || eyeH != m_LastFrameEyeH)
+                return true;
+
+            if (m_SplatScale != m_LastFrameSplatScale ||
+                m_OpacityScale != m_LastFrameOpacityScale ||
+                m_SHOrder != m_LastFrameSHOrder ||
+                m_SHOnly != m_LastFrameSHOnly ||
+                (int)m_RenderMode != m_LastFrameRenderMode)
+                return true;
+
+            return m_EditVersion != m_LastFrameEditVersion;
+        }
+
+        internal void MarkSplatUpdateDone(Camera cam, Matrix4x4 matrix)
+        {
+            m_LastFrameViewMatrix = cam.worldToCameraMatrix;
+            m_LastFrameProjectionMatrix = cam.projectionMatrix;
+            m_LastFrameObjectMatrix = matrix;
+            m_LastFrameScreenW = cam.pixelWidth;
+            m_LastFrameScreenH = cam.pixelHeight;
+            m_LastFrameEyeW = XRSettings.eyeTextureWidth;
+            m_LastFrameEyeH = XRSettings.eyeTextureHeight;
+            m_LastFrameSplatScale = m_SplatScale;
+            m_LastFrameOpacityScale = m_OpacityScale;
+            m_LastFrameSHOrder = m_SHOrder;
+            m_LastFrameSHOnly = m_SHOnly;
+            m_LastFrameRenderMode = (int)m_RenderMode;
+            m_LastFrameEditVersion = m_EditVersion;
+            m_FirstFrame = false;
         }
 
         public void Update()
@@ -739,29 +827,50 @@ namespace GaussianSplatting.Runtime
             editSelectedBounds = bounds;
         }
 
-        void UpdateCutoutsBuffer()
+        // Uploads cutout data to GPU only when it changed, and reports whether it changed.
+        // The return value is also used by the per-frame GPU work gating: moving a cutout
+        // invalidates the computed view data (cutouts are evaluated during view calc).
+        internal bool UpdateCutoutsBuffer()
         {
             int bufferSize = m_Cutouts?.Length ?? 0;
+            int cutoutCount = bufferSize;
             if (bufferSize == 0)
                 bufferSize = 1;
-            if (m_GpuEditCutouts == null || m_GpuEditCutouts.count != bufferSize)
+
+            bool needRealloc = m_GpuEditCutouts == null || m_GpuEditCutouts.count != bufferSize;
+            if (needRealloc)
             {
                 m_GpuEditCutouts?.Dispose();
                 m_GpuEditCutouts = new GraphicsBuffer(GraphicsBuffer.Target.Structured, bufferSize, UnsafeUtility.SizeOf<GaussianCutout.ShaderData>()) { name = "GaussianCutouts" };
+                m_CutoutDataCache = null;
             }
 
-            NativeArray<GaussianCutout.ShaderData> data = new(bufferSize, Allocator.Temp);
-            if (m_Cutouts != null)
+            if (m_CutoutDataCache == null || m_CutoutDataCache.Length != bufferSize)
+                m_CutoutDataCache = new GaussianCutout.ShaderData[bufferSize];
+
+            bool changed = needRealloc;
+            var matrix = transform.localToWorldMatrix;
+            for (var i = 0; i < bufferSize; ++i)
             {
-                var matrix = transform.localToWorldMatrix;
-                for (var i = 0; i < m_Cutouts.Length; ++i)
+                GaussianCutout.ShaderData sd = i < cutoutCount
+                    ? GaussianCutout.GetShaderData(m_Cutouts[i], matrix)
+                    : default;
+                if (sd.matrix != m_CutoutDataCache[i].matrix || sd.typeAndFlags != m_CutoutDataCache[i].typeAndFlags)
                 {
-                    data[i] = GaussianCutout.GetShaderData(m_Cutouts[i], matrix);
+                    m_CutoutDataCache[i] = sd;
+                    changed = true;
                 }
             }
 
-            m_GpuEditCutouts.SetData(data);
-            data.Dispose();
+            if (changed)
+            {
+                NativeArray<GaussianCutout.ShaderData> data = new(bufferSize, Allocator.Temp);
+                for (var i = 0; i < bufferSize; ++i)
+                    data[i] = m_CutoutDataCache[i];
+                m_GpuEditCutouts.SetData(data);
+                data.Dispose();
+            }
+            return changed;
         }
 
         bool EnsureEditingBuffers()
