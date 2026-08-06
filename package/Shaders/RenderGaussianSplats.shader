@@ -8,7 +8,7 @@ Shader "Gaussian Splatting/Render Splats"
         Pass
         {
             ZWrite Off
-            Blend OneMinusDstAlpha One
+            Blend One OneMinusSrcAlpha
             Cull Off
             
 CGPROGRAM
@@ -17,6 +17,7 @@ CGPROGRAM
 #pragma require compute
 #pragma use_dxc
 
+#include "UnityCG.cginc"
 #include "GaussianSplatting.hlsl"
 
 StructuredBuffer<uint> _OrderBuffer;
@@ -109,7 +110,9 @@ half4 frag (v2f i) : SV_Target
     if (alpha < 1.0/255.0)
         discard;
 
-    half4 res = half4(i.col.rgb * alpha, alpha);
+    // premultiplied linear color: can be blended directly over the scene,
+    // and also accumulates correctly into the two-stage splat RT
+    half4 res = half4(GammaToLinearSpace(i.col.rgb) * alpha, alpha);
     return res;
 }
 ENDCG

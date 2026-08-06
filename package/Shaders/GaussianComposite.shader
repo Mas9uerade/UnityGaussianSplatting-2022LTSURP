@@ -8,7 +8,7 @@ Shader "Hidden/Gaussian Splatting/Composite"
             ZWrite Off
             ZTest Always
             Cull Off
-            Blend SrcAlpha OneMinusSrcAlpha
+            Blend One OneMinusSrcAlpha
 
 CGPROGRAM
 #pragma vertex vert
@@ -35,7 +35,8 @@ Texture2D _GaussianSplatRT;
 half4 frag (v2f i) : SV_Target
 {
     half4 col = _GaussianSplatRT.Load(int3(i.vertex.xy, 0));
-    return float4(GammaToLinearSpace(col.rgb/col.a),col.a);
+    // RT now holds premultiplied linear color (see RenderGaussianSplats.shader)
+    return float4(col.rgb, col.a);
 }
 ENDCG
         }

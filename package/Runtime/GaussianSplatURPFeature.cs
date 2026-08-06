@@ -21,6 +21,12 @@ namespace GaussianSplatting.Runtime
             RTHandle m_RenderTarget;
             internal ScriptableRenderer m_Renderer = null;
             internal CommandBuffer m_Cmb = null;
+            readonly GaussianSplatURPFeature m_Feature;
+
+            public GSRenderPass(GaussianSplatURPFeature feature)
+            {
+                m_Feature = feature;
+            }
 
             public void Dispose()
             {
@@ -29,15 +35,25 @@ namespace GaussianSplatting.Runtime
 
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
-                RenderTextureDescriptor rtDesc = renderingData.cameraData.cameraTargetDescriptor;
-                rtDesc.depthBufferBits = 0;
-                rtDesc.msaaSamples = 1;
-                rtDesc.graphicsFormat = GraphicsFormat.R16G16B16A16_SFloat;
-                RenderingUtils.ReAllocateIfNeeded(ref m_RenderTarget, rtDesc, FilterMode.Point, TextureWrapMode.Clamp, name: GaussianSplatRTName);
-                cmd.SetGlobalTexture(m_RenderTarget.name, m_RenderTarget.nameID);
+                if (m_Feature.m_EnableDirectRendering)
+                {
+                    // draw splats directly into the camera target, blended over the scene
+                    ConfigureTarget(m_Renderer.cameraColorTargetHandle, m_Renderer.cameraDepthTargetHandle);
+                    ConfigureClear(ClearFlag.None, Color.clear);
+                }
+                else
+                {
+                    // two-stage fallback: splats go into an intermediate RT, composited afterwards
+                    RenderTextureDescriptor rtDesc = renderingData.cameraData.cameraTargetDescriptor;
+                    rtDesc.depthBufferBits = 0;
+                    rtDesc.msaaSamples = 1;
+                    rtDesc.graphicsFormat = GraphicsFormat.R16G16B16A16_SFloat;
+                    RenderingUtils.ReAllocateIfNeeded(ref m_RenderTarget, rtDesc, FilterMode.Point, TextureWrapMode.Clamp, name: GaussianSplatRTName);
+                    cmd.SetGlobalTexture(m_RenderTarget.name, m_RenderTarget.nameID);
 
-                ConfigureTarget(m_RenderTarget, m_Renderer.cameraDepthTargetHandle);
-                ConfigureClear(ClearFlag.Color, new Color(0, 0, 0, 0));
+                    ConfigureTarget(m_RenderTarget, m_Renderer.cameraDepthTargetHandle);
+                    ConfigureClear(ClearFlag.Color, new Color(0, 0, 0, 0));
+                }
             }
 
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
@@ -49,19 +65,23 @@ namespace GaussianSplatting.Runtime
                 Material matComposite = GaussianSplatRenderSystem.instance.SortAndRenderSplats(renderingData.cameraData.camera, m_Cmb);
 
                 // compose
-                m_Cmb.BeginSample(GaussianSplatRenderSystem.s_ProfCompose);
-                Blitter.BlitCameraTexture(m_Cmb, m_RenderTarget, m_Renderer.cameraColorTargetHandle, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store, matComposite, 0);
-                m_Cmb.EndSample(GaussianSplatRenderSystem.s_ProfCompose);
+                if (!m_Feature.m_EnableDirectRendering && matComposite != null)
+                {
+                    m_Cmb.BeginSample(GaussianSplatRenderSystem.s_ProfCompose);
+                    Blitter.BlitCameraTexture(m_Cmb, m_RenderTarget, m_Renderer.cameraColorTargetHandle, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store, matComposite, 0);
+                    m_Cmb.EndSample(GaussianSplatRenderSystem.s_ProfCompose);
+                }
                 context.ExecuteCommandBuffer(m_Cmb);
             }
         }
 
+        [SerializeField] bool m_EnableDirectRendering = true;
         GSRenderPass m_Pass;
         bool m_HasCamera;
 
         public override void Create()
         {
-            m_Pass = new GSRenderPass
+            m_Pass = new GSRenderPass(this)
             {
                 renderPassEvent = RenderPassEvent.BeforeRenderingTransparents
             };
