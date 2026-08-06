@@ -54,7 +54,7 @@ inline void HistogramDigitCounts(uint gtid, uint gid)
     const uint histOffset = gtid / 64 * RADIX;
     // actual count comes from the GPU buffer, so the sort can be dispatched with
     // a conservative (full size) threadblock count; every block clamps to it
-    const uint numKeys = _VisibleSplatCount[0];
+    const uint numKeys = GetSortCount();
     const uint partitionEnd = min((gid + 1) * PART_SIZE, numKeys);
     for (uint i = gtid + gid * PART_SIZE; i < partitionEnd; i += US_DIM)
     {
@@ -457,7 +457,7 @@ void Downsweep(uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
     OffsetStruct offsets;
     const uint waveSize = getWaveSize();
 
-    const uint numKeys = _VisibleSplatCount[0];
+    const uint numKeys = GetSortCount();
     const uint blockStart = gid.x * PART_SIZE;
     if (blockStart >= numKeys)
         return; // threadblocks beyond the actual sorted count have nothing to do

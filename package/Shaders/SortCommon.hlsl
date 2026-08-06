@@ -44,6 +44,13 @@ cbuffer cbGpuSorting : register(b0)
     uint padding;
 };
 
+// Returns the number of keys to sort. With frustum culling enabled this comes from
+// the GPU visibility pass; otherwise it is the full splat count set by the CPU.
+inline uint GetSortCount()
+{
+    return _CullingEnabled ? _VisibleSplatCount[0] : e_numKeys;
+}
+
 #if defined(KEY_UINT)
 RWStructuredBuffer<uint> b_sort;
 RWStructuredBuffer<uint> b_alt;
@@ -275,7 +282,7 @@ inline KeyStruct LoadKeysWLT16(uint gtid, uint waveSize, uint partIndex, uint se
 inline KeyStruct LoadKeysPartialWGE16(uint gtid, uint waveSize, uint partIndex)
 {
     KeyStruct keys;
-    const uint numKeys = _VisibleSplatCount[0];
+    const uint numKeys = GetSortCount();
     [unroll]
     for (uint i = 0, t = DeviceOffsetWGE16(gtid, waveSize, partIndex);
         i < KEYS_PER_THREAD;
@@ -292,7 +299,7 @@ inline KeyStruct LoadKeysPartialWGE16(uint gtid, uint waveSize, uint partIndex)
 inline KeyStruct LoadKeysPartialWLT16(uint gtid, uint waveSize, uint partIndex, uint serialIterations)
 {
     KeyStruct keys;
-    const uint numKeys = _VisibleSplatCount[0];
+    const uint numKeys = GetSortCount();
     [unroll]
     for (uint i = 0, t = DeviceOffsetWLT16(gtid, waveSize, partIndex, serialIterations);
         i < KEYS_PER_THREAD;
@@ -567,7 +574,7 @@ inline void ScatterKeysShared(OffsetStruct offsets, KeyStruct keys)
 
 inline uint DescendingIndex(uint deviceIndex)
 {
-    return _VisibleSplatCount[0] - deviceIndex - 1;
+    return GetSortCount() - deviceIndex - 1;
 }
 
 inline void WriteKey(uint deviceIndex, uint groupSharedIndex)
@@ -799,7 +806,7 @@ inline void ScatterKeysOnlyDevicePartialDescending(uint gtid, uint finalPartSize
 
 inline void ScatterKeysOnlyDevicePartial(uint gtid, uint partIndex)
 {
-    const uint finalPartSize = _VisibleSplatCount[0] - partIndex * PART_SIZE;
+    const uint finalPartSize = GetSortCount() - partIndex * PART_SIZE;
 #if defined(SHOULD_ASCEND)
     ScatterKeysOnlyDevicePartialAscending(gtid, finalPartSize);
 #else
@@ -853,7 +860,7 @@ inline void LoadPayloadsPartialWGE16(
     uint partIndex,
     inout KeyStruct payloads)
 {
-    const uint numKeys = _VisibleSplatCount[0];
+    const uint numKeys = GetSortCount();
     [unroll]
     for (uint i = 0, t = DeviceOffsetWGE16(gtid, waveSize, partIndex);
         i < KEYS_PER_THREAD;
@@ -871,7 +878,7 @@ inline void LoadPayloadsPartialWLT16(
     uint serialIterations,
     inout KeyStruct payloads)
 {
-    const uint numKeys = _VisibleSplatCount[0];
+    const uint numKeys = GetSortCount();
     [unroll]
     for (uint i = 0, t = DeviceOffsetWLT16(gtid, waveSize, partIndex, serialIterations);
         i < KEYS_PER_THREAD;
@@ -922,7 +929,7 @@ inline void ScatterPairsDevicePartial(
     OffsetStruct offsets)
 {
     DigitStruct digits;
-    const uint finalPartSize = _VisibleSplatCount[0] - partIndex * PART_SIZE;
+    const uint finalPartSize = GetSortCount() - partIndex * PART_SIZE;
 #if defined(SHOULD_ASCEND)
     ScatterPairsKeyPhaseAscendingPartial(gtid, finalPartSize, digits);
 #else
