@@ -36,9 +36,8 @@
 #pragma require waveballot
 #pragma use_dxc
 
-// GPU-driven visibility state. Declared before the includes: Unity's Metal shader
-// backend compiles in textual order and requires declaration before use, and the
-// sort include (DeviceRadixSort.hlsl / SortCommon.hlsl) references these.
+// GPU 驱动的可见性状态,必须在 include 之前声明:Unity 的 Metal 后端按文本顺序编译,
+// 要求先声明后使用;排序相关的 include 会引用这些变量。
 RWStructuredBuffer<uint> _VisibleSplatIndices;
 RWByteAddressBuffer _VisibleSplatCount;
 RWStructuredBuffer<uint> _DrawArgs;
@@ -204,7 +203,7 @@ bool IsSplatCut(float3 pos)
 void CSInitVisibleList (uint3 id : SV_DispatchThreadID)
 {
     _VisibleSplatCount.Store(0, 0);
-    // DrawProceduralIndirect args: indexCountPerInstance, instanceCount,
+    // DrawProceduralIndirect 参数:indexCountPerInstance, instanceCount,
     // startIndexLocation, baseVertexLocation, startInstanceLocation
     _DrawArgs[0] = 6;
     _DrawArgs[1] = 0;
@@ -227,14 +226,14 @@ void CSCalcVisibility (uint3 id : SV_DispatchThreadID)
     bool visible = centerClipPos.w > 0;
     if (visible)
     {
-        // conservative margin: splats whose center is somewhat outside the screen
-        // can still have a visible footprint; keep them until they are far off-screen
+        // 使用保守边距:泼溅中心即使略在屏幕外,其投影仍可能覆盖到像素,
+        // 因此保留到远离屏幕边缘为止
         const float kFrustumMargin = 1.5;
         float w = centerClipPos.w * kFrustumMargin;
         visible = abs(centerClipPos.x) <= w && abs(centerClipPos.y) <= w;
     }
 
-    // deleted splats are never visible
+    // 已删除的泼溅永远不参与渲染
     if (visible && _SplatBitsValid)
     {
         uint wordIdx = idx / 32;
@@ -244,7 +243,7 @@ void CSCalcVisibility (uint3 id : SV_DispatchThreadID)
             visible = false;
     }
 
-    // cutouts remove splats
+    // 被剪裁体裁掉的泼溅不可见
     if (visible && IsSplatCut(pos))
         visible = false;
 

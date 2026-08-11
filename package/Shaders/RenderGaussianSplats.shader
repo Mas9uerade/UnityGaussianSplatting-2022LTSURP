@@ -3,7 +3,7 @@ Shader "Gaussian Splatting/Render Splats"
 {
     Properties
     {
-        // controlled per object at runtime via GaussianSplatRenderer.m_EnableDepthWrite
+        // 运行时由 GaussianSplatRenderer.m_EnableDepthWrite 按对象控制
         [Toggle] _ZWrite ("Write Depth", Float) = 0
     }
 
@@ -57,9 +57,8 @@ v2f vert (uint vtxID : SV_VertexID, uint instID : SV_InstanceID)
 		o.col.b = f16tof32(view.color.y >> 16);
 		o.col.a = f16tof32(view.color.y);
 
-		// 6 sequential vertices per quad (2 triangles), so it can be drawn via
-		// DrawProceduralIndirect without an index buffer. Same result as the old
-		// index buffer (0,1,2,1,3,2) mapping.
+		// 每个四边形由 6 个顺序顶点组成(两个三角形),这样就能在不使用索引缓冲的
+		// DrawProceduralIndirect 下绘制;结果与旧的索引缓冲(0,1,2,1,3,2)一致。
 		float2 quadPos;
 		uint v = vtxID;
 		if (v == 0) quadPos = float2(-2, -2);
@@ -116,8 +115,7 @@ half4 frag (v2f i) : SV_Target
     if (alpha < 1.0/255.0)
         discard;
 
-    // premultiplied linear color: can be blended directly over the scene,
-    // and also accumulates correctly into the two-stage splat RT
+    // 输出预乘线性颜色:既能直接与场景混合,也能在两段式的中间渲染纹理中正确累加
     half4 res = half4(GammaToLinearSpace(i.col.rgb) * alpha, alpha);
     return res;
 }

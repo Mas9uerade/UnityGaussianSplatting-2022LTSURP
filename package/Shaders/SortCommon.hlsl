@@ -44,8 +44,8 @@ cbuffer cbGpuSorting : register(b0)
     uint padding;
 };
 
-// Returns the number of keys to sort. With frustum culling enabled this comes from
-// the GPU visibility pass; otherwise it is the full splat count set by the CPU.
+// 返回需要排序的键数量:启用视锥剔除时取自 GPU 可见性阶段,
+// 否则为 CPU 传入的全量泼溅数量。
 inline uint GetSortCount()
 {
     return _CullingEnabled ? _VisibleSplatCount.Load(0) : e_numKeys;

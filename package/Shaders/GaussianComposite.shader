@@ -35,7 +35,7 @@ Texture2D _GaussianSplatRT;
 half4 frag (v2f i) : SV_Target
 {
     half4 col = _GaussianSplatRT.Load(int3(i.vertex.xy, 0));
-    // RT now holds premultiplied linear color (see RenderGaussianSplats.shader)
+    // 中间渲染纹理保存的是预乘线性颜色(见 RenderGaussianSplats.shader)
     return float4(col.rgb, col.a);
 }
 ENDCG

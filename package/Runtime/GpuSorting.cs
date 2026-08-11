@@ -169,7 +169,7 @@ namespace GaussianSplatting.Runtime
             cmd.SetComputeBufferParam(m_CS, m_kernelDownsweep, "b_passHist", args.resources.passHistBuffer);
             cmd.SetComputeBufferParam(m_CS, m_kernelDownsweep, "b_globalHist", args.resources.globalHistBuffer);
 
-            // Actual key count (can differ from args.count when only a subset is sorted)
+            // 实际参与排序的数量(启用剔除时只排可见子集,可能小于全量)
             cmd.SetComputeBufferParam(m_CS, m_kernelUpsweep, "_VisibleSplatCount", args.countBuffer);
             cmd.SetComputeBufferParam(m_CS, m_kernelDownsweep, "_VisibleSplatCount", args.countBuffer);
 

@@ -52,8 +52,8 @@ void InitDeviceRadixSort(int3 id : SV_DispatchThreadID)
 inline void HistogramDigitCounts(uint gtid, uint gid)
 {
     const uint histOffset = gtid / 64 * RADIX;
-    // actual count comes from the GPU buffer, so the sort can be dispatched with
-    // a conservative (full size) threadblock count; every block clamps to it
+    // 实际数量来自 GPU 缓冲,因此排序可以用保守的(全量)线程块数派发,
+    // 每个线程块自行钳制到实际数量
     const uint numKeys = GetSortCount();
     const uint partitionEnd = min((gid + 1) * PART_SIZE, numKeys);
     for (uint i = gtid + gid * PART_SIZE; i < partitionEnd; i += US_DIM)
@@ -460,7 +460,7 @@ void Downsweep(uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
     const uint numKeys = GetSortCount();
     const uint blockStart = gid.x * PART_SIZE;
     if (blockStart >= numKeys)
-        return; // threadblocks beyond the actual sorted count have nothing to do
+        return; // 超出实际排序数量的线程块无事可做,直接返回
     const bool lastUsedBlock = blockStart + PART_SIZE >= numKeys;
     
     ClearWaveHists(gtid.x, waveSize);

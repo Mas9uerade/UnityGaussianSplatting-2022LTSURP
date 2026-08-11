@@ -116,7 +116,7 @@ namespace GaussianSplatting.Runtime
                 matComposite = gs.m_MatComposite;
                 var mpb = kvp.Item2;
 
-                // sort
+                // 排序(仅当相机/对象状态变化或到达固定排序周期时执行)
                 var matrix = gs.transform.localToWorldMatrix;
                 bool cutoutsChanged = gs.UpdateCutoutsBuffer();
                 bool motionGating = gs.m_EnableMotionGating;
@@ -170,7 +170,7 @@ namespace GaussianSplatting.Runtime
                 cmb.BeginSample(s_ProfDraw);
                 if (gs.m_RenderMode == GaussianSplatRenderer.RenderMode.Splats && gs.m_EnableFrustumCulling)
                 {
-                    // draw only the visible splats; instance count comes from the GPU visibility pass
+                    // 只绘制可见的泼溅,实例数量由 GPU 可见性阶段写入的间接参数决定
                     cmb.DrawProceduralIndirect(matrix, displayMat, 0, MeshTopology.Triangles, gs.m_GpuDrawArgs, 0, mpb);
                 }
                 else
@@ -318,7 +318,7 @@ namespace GaussianSplatting.Runtime
         Hash128 m_PrevHash;
         bool m_Registered;
 
-        // per-frame GPU work gating: skip sort / view data recompute when nothing relevant changed
+        // 每帧 GPU 工作量门控:相机/对象等状态未变化时跳过排序与视图数据重算
         int m_EditVersion;
         int m_LastFrameEditVersion = -1;
         Matrix4x4 m_LastFrameViewMatrix;
@@ -396,7 +396,7 @@ namespace GaussianSplatting.Runtime
             private set
             {
                 if (value)
-                    ++m_EditVersion; // bump so per-frame GPU work gating detects the change
+                    ++m_EditVersion; // 递增版本号,让每帧门控检测到编辑变化
                 m_EditModified = value;
             }
         }
@@ -511,7 +511,7 @@ namespace GaussianSplatting.Runtime
             m_GpuDrawArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, 4) { name = "GaussianSplatDrawArgs" };
             m_GpuDrawArgs.SetData(new uint[] { 6, 0, 0, 0, 0 });
 
-            // init identity keys buffer to splat indices (used for debug box rendering)
+            // 初始化恒等索引缓冲(0..N-1),供调试盒子模式绘制使用
             m_CSSplatUtilities.SetBuffer((int)KernelIndices.SetIndices, Props.SplatSortKeys, m_GpuSortKeys);
             m_CSSplatUtilities.SetInt(Props.SplatCount, m_GpuSortDistances.count);
             m_CSSplatUtilities.GetKernelThreadGroupSizes((int)KernelIndices.SetIndices, out uint gsX, out _, out _);
@@ -701,8 +701,8 @@ namespace GaussianSplatting.Runtime
             cmb.DispatchCompute(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, (m_GpuView.count + (int)m_CalcViewGroupSizeX - 1)/(int)m_CalcViewGroupSizeX, 1, 1);
         }
 
-        // Computes which splats are visible for the current camera (frustum, deleted, cutouts)
-        // and compacts them into m_GpuVisibleSplatIndices. Also updates the indirect draw args.
+        // 计算当前相机下哪些泼溅可见(视锥剔除、已删除、被剪裁体裁掉),
+        // 把可见泼溅压入紧凑的可见索引表,并同步更新间接绘制参数。
         internal void PrepareVisibleSplats(CommandBuffer cmb, Camera cam)
         {
             if (cam.cameraType == CameraType.Preview)
@@ -774,8 +774,8 @@ namespace GaussianSplatting.Runtime
             m_CSSplatUtilities.GetKernelThreadGroupSizes((int)KernelIndices.CalcVisibility, out m_CalcVisibilityGroupSizeX, out _, out _);
         }
 
-        // Returns true when the per-frame GPU work (sorting + view data) needs to be redone for this camera/object state.
-        // When false, the previously computed sort order and view data buffers remain valid and can be reused as-is.
+        // 当相机/对象状态变化需要重做每帧 GPU 工作(排序 + 视图数据)时返回 true;
+        // 返回 false 表示上一帧的排序结果与视图数据缓冲仍然有效,可以直接复用。
         internal bool NeedsSplatUpdate(Camera cam, Matrix4x4 matrix, bool cutoutsChanged)
         {
             if (m_FirstFrame || cutoutsChanged)
@@ -922,9 +922,9 @@ namespace GaussianSplatting.Runtime
             editSelectedBounds = bounds;
         }
 
-        // Uploads cutout data to GPU only when it changed, and reports whether it changed.
-        // The return value is also used by the per-frame GPU work gating: moving a cutout
-        // invalidates the computed view data (cutouts are evaluated during view calc).
+        // 剪裁体数据仅在变化时才上传到 GPU,并返回是否发生变化。
+        // 返回值同时被每帧门控使用:移动剪裁体会使视图数据失效
+        // (剪裁体在视图计算阶段参与求值)。
         internal bool UpdateCutoutsBuffer()
         {
             int bufferSize = m_Cutouts?.Length ?? 0;
