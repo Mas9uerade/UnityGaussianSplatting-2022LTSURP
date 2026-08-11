@@ -107,6 +107,7 @@ namespace GaussianSplatting.Runtime
         {
             if (!m_HasCamera)
                 return;
+            m_Pass.m_Renderer = renderer;
             renderer.EnqueuePass(m_Pass);
         }
 
