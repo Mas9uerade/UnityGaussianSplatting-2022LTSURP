@@ -27,6 +27,11 @@ namespace GaussianSplatting.Editor
         SerializedProperty m_PropSHOrder;
         SerializedProperty m_PropSHOnly;
         SerializedProperty m_PropSortNthFrame;
+        SerializedProperty m_PropEnableMotionGating;
+        SerializedProperty m_PropEnableFrustumCulling;
+        SerializedProperty m_PropEnableKernelSizeCache;
+        SerializedProperty m_PropEnableCutoutCaching;
+        SerializedProperty m_PropEnableDepthWrite;
         SerializedProperty m_PropRenderMode;
         SerializedProperty m_PropPointDisplaySize;
         SerializedProperty m_PropCutouts;
@@ -67,6 +72,11 @@ namespace GaussianSplatting.Editor
             m_PropSHOrder = serializedObject.FindProperty("m_SHOrder");
             m_PropSHOnly = serializedObject.FindProperty("m_SHOnly");
             m_PropSortNthFrame = serializedObject.FindProperty("m_SortNthFrame");
+            m_PropEnableMotionGating = serializedObject.FindProperty("m_EnableMotionGating");
+            m_PropEnableFrustumCulling = serializedObject.FindProperty("m_EnableFrustumCulling");
+            m_PropEnableKernelSizeCache = serializedObject.FindProperty("m_EnableKernelSizeCache");
+            m_PropEnableCutoutCaching = serializedObject.FindProperty("m_EnableCutoutCaching");
+            m_PropEnableDepthWrite = serializedObject.FindProperty("m_EnableDepthWrite");
             m_PropRenderMode = serializedObject.FindProperty("m_RenderMode");
             m_PropPointDisplaySize = serializedObject.FindProperty("m_PointDisplaySize");
             m_PropCutouts = serializedObject.FindProperty("m_Cutouts");
@@ -111,6 +121,13 @@ namespace GaussianSplatting.Editor
             EditorGUILayout.PropertyField(m_PropSHOrder);
             EditorGUILayout.PropertyField(m_PropSHOnly);
             EditorGUILayout.PropertyField(m_PropSortNthFrame);
+
+            GUILayout.Label("Performance Optimizations", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(m_PropEnableMotionGating);
+            EditorGUILayout.PropertyField(m_PropEnableFrustumCulling);
+            EditorGUILayout.PropertyField(m_PropEnableKernelSizeCache);
+            EditorGUILayout.PropertyField(m_PropEnableCutoutCaching);
+            EditorGUILayout.PropertyField(m_PropEnableDepthWrite);
 
             EditorGUILayout.Space();
             GUILayout.Label("Debugging Tweaks", EditorStyles.boldLabel);
