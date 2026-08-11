@@ -680,11 +680,9 @@ namespace GaussianSplatting.Runtime
             // calculate view dependent data for each splat
             SetAssetDataOnCS(cmb, KernelIndices.CalcViewData);
             cmb.SetComputeIntParam(m_CSSplatUtilities, Props.CullingEnabled, m_EnableFrustumCulling ? 1 : 0);
-            if (m_EnableFrustumCulling)
-            {
-                cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, Props.VisibleSplatIndices, m_GpuVisibleSplatIndices);
-                cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, Props.VisibleSplatCount, m_GpuVisibleCount);
-            }
+            // kernel 声明了这两个缓冲,必须始终绑定(仅剔除开启时才会被读取)
+            cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, Props.VisibleSplatIndices, m_GpuVisibleSplatIndices);
+            cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, Props.VisibleSplatCount, m_GpuVisibleCount);
 
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixMV, matView * matO2W);
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixObjectToWorld, matO2W);
@@ -742,11 +740,9 @@ namespace GaussianSplatting.Runtime
             cmd.BeginSample(s_ProfSort);
             cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.SplatSortDistances, m_GpuSortDistances);
             cmd.SetComputeIntParam(m_CSSplatUtilities, Props.CullingEnabled, m_EnableFrustumCulling ? 1 : 0);
-            if (m_EnableFrustumCulling)
-            {
-                cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.VisibleSplatIndices, m_GpuVisibleSplatIndices);
-                cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.VisibleSplatCount, m_GpuVisibleCount);
-            }
+            // kernel 声明了这两个缓冲,必须始终绑定(仅剔除开启时才会被读取)
+            cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.VisibleSplatIndices, m_GpuVisibleSplatIndices);
+            cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.VisibleSplatCount, m_GpuVisibleCount);
             cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.SplatChunks, m_GpuChunks);
             cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.SplatPos, m_GpuPosData);
             cmd.SetComputeIntParam(m_CSSplatUtilities, Props.SplatFormat, (int)m_Asset.posFormat);
