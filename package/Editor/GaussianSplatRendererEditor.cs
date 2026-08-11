@@ -29,6 +29,7 @@ namespace GaussianSplatting.Editor
         SerializedProperty m_PropSortNthFrame;
         SerializedProperty m_PropEnableMotionGating;
         SerializedProperty m_PropEnableFrustumCulling;
+        SerializedProperty m_PropEnableSorting;
         SerializedProperty m_PropEnableKernelSizeCache;
         SerializedProperty m_PropEnableCutoutCaching;
         SerializedProperty m_PropEnableDepthWrite;
@@ -76,6 +77,7 @@ namespace GaussianSplatting.Editor
             m_PropSortNthFrame = serializedObject.FindProperty("m_SortNthFrame");
             m_PropEnableMotionGating = serializedObject.FindProperty("m_EnableMotionGating");
             m_PropEnableFrustumCulling = serializedObject.FindProperty("m_EnableFrustumCulling");
+            m_PropEnableSorting = serializedObject.FindProperty("m_EnableSorting");
             m_PropEnableKernelSizeCache = serializedObject.FindProperty("m_EnableKernelSizeCache");
             m_PropEnableCutoutCaching = serializedObject.FindProperty("m_EnableCutoutCaching");
             m_PropEnableDepthWrite = serializedObject.FindProperty("m_EnableDepthWrite");
@@ -129,6 +131,7 @@ namespace GaussianSplatting.Editor
             GUILayout.Label("Performance Optimizations", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(m_PropEnableMotionGating);
             EditorGUILayout.PropertyField(m_PropEnableFrustumCulling);
+            EditorGUILayout.PropertyField(m_PropEnableSorting);
             EditorGUILayout.PropertyField(m_PropEnableKernelSizeCache);
             EditorGUILayout.PropertyField(m_PropEnableCutoutCaching);
             EditorGUILayout.PropertyField(m_PropEnableDepthWrite);

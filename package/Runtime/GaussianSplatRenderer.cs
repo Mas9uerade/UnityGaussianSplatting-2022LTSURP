@@ -139,7 +139,7 @@ namespace GaussianSplatting.Runtime
                 bool doSort = (motionGating || gs.m_EnableFrustumCulling)
                     ? needSplatUpdate || (gs.m_SortNthFrame > 1 && gs.m_FrameCounter % gs.m_SortNthFrame == 0)
                     : gs.m_FrameCounter % gs.m_SortNthFrame == 0;
-                if (doSort)
+                if (doSort && gs.m_EnableSorting)
                     gs.SortPoints(cmb, cam, matrix);
                 ++gs.m_FrameCounter;
 
@@ -275,6 +275,8 @@ namespace GaussianSplatting.Runtime
         public bool m_EnableMotionGating = true;
         [Tooltip("Frustum culling: only splats visible to the camera are sorted, view-calculated and drawn")]
         public bool m_EnableFrustumCulling = true;
+        [Tooltip("Sort splats by distance every frame. Disable (with culling off) to draw in original index order, for isolating sort-related flicker")]
+        public bool m_EnableSorting = true;
         [Tooltip("Cache compute kernel thread group sizes instead of querying them every frame")]
         public bool m_EnableKernelSizeCache = true;
         [Tooltip("Upload cutout data to the GPU only when cutouts changed")]
