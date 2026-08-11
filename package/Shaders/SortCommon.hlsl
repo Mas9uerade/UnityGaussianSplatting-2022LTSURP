@@ -48,7 +48,7 @@ cbuffer cbGpuSorting : register(b0)
 // the GPU visibility pass; otherwise it is the full splat count set by the CPU.
 inline uint GetSortCount()
 {
-    return _CullingEnabled ? _VisibleSplatCount[0] : e_numKeys;
+    return _CullingEnabled ? _VisibleSplatCount.Load(0) : e_numKeys;
 }
 
 #if defined(KEY_UINT)

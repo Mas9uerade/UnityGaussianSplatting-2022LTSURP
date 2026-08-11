@@ -36,6 +36,14 @@
 #pragma require waveballot
 #pragma use_dxc
 
+// GPU-driven visibility state. Declared before the includes: Unity's Metal shader
+// backend compiles in textual order and requires declaration before use, and the
+// sort include (DeviceRadixSort.hlsl / SortCommon.hlsl) references these.
+RWStructuredBuffer<uint> _VisibleSplatIndices;
+RWByteAddressBuffer _VisibleSplatCount;
+RWStructuredBuffer<uint> _DrawArgs;
+uint _CullingEnabled;
+
 #include "DeviceRadixSort.hlsl"
 #include "GaussianSplatting.hlsl"
 #include "UnityCG.cginc"
@@ -49,10 +57,6 @@ int _SelectionMode;
 
 RWStructuredBuffer<uint> _SplatSortDistances;
 RWStructuredBuffer<uint> _SplatSortKeys;
-RWStructuredBuffer<uint> _VisibleSplatIndices;
-RWStructuredBuffer<uint> _VisibleSplatCount;
-RWStructuredBuffer<uint> _DrawArgs;
-uint _CullingEnabled;
 uint _SplatCount;
 
 // radix sort etc. friendly, see http://stereopsis.com/radix.html
@@ -77,7 +81,7 @@ void CSSetIndices (uint3 id : SV_DispatchThreadID)
 void CSCalcDistances (uint3 id : SV_DispatchThreadID)
 {
     uint idx = id.x;
-    uint count = _CullingEnabled ? _VisibleSplatCount[0] : _SplatCount;
+    uint count = _CullingEnabled ? _VisibleSplatCount.Load(0) : _SplatCount;
     if (idx >= count)
         return;
 
@@ -89,68 +93,6 @@ void CSCalcDistances (uint3 id : SV_DispatchThreadID)
     pos = mul(_MatrixMV, float4(pos.xyz, 1)).xyz;
 
     _SplatSortDistances[idx] = FloatToSortableUint(pos.z);
-}
-
-[numthreads(1,1,1)]
-void CSInitVisibleList (uint3 id : SV_DispatchThreadID)
-{
-    _VisibleSplatCount[0] = 0;
-    // DrawProceduralIndirect args: indexCountPerInstance, instanceCount,
-    // startIndexLocation, baseVertexLocation, startInstanceLocation
-    _DrawArgs[0] = 6;
-    _DrawArgs[1] = 0;
-    _DrawArgs[2] = 0;
-    _DrawArgs[3] = 0;
-    _DrawArgs[4] = 0;
-}
-
-[numthreads(GROUP_SIZE,1,1)]
-void CSCalcVisibility (uint3 id : SV_DispatchThreadID)
-{
-    uint idx = id.x;
-    if (idx >= _SplatCount)
-        return;
-
-    float3 pos = LoadSplatPos(idx);
-    float3 centerWorldPos = mul(_MatrixObjectToWorld, float4(pos, 1)).xyz;
-    float4 centerClipPos = mul(UNITY_MATRIX_VP, float4(centerWorldPos, 1));
-
-    bool visible = centerClipPos.w > 0;
-    if (visible)
-    {
-        // conservative margin: splats whose center is somewhat outside the screen
-        // can still have a visible footprint; keep them until they are far off-screen
-        const float kFrustumMargin = 1.5;
-        float w = centerClipPos.w * kFrustumMargin;
-        visible = abs(centerClipPos.x) <= w && abs(centerClipPos.y) <= w;
-    }
-
-    // deleted splats are never visible
-    if (visible && _SplatBitsValid)
-    {
-        uint wordIdx = idx / 32;
-        uint bitIdx = idx & 31;
-        uint wordVal = _SplatDeletedBits.Load(wordIdx * 4);
-        if (wordVal & (1u << bitIdx))
-            visible = false;
-    }
-
-    // cutouts remove splats
-    if (visible && IsSplatCut(pos))
-        visible = false;
-
-    if (visible)
-    {
-        uint dst;
-        _VisibleSplatCount.InterlockedAdd(0, 1, dst);
-        _VisibleSplatIndices[dst] = idx;
-    }
-}
-
-[numthreads(1,1,1)]
-void CSWriteVisibleArgs (uint3 id : SV_DispatchThreadID)
-{
-    _DrawArgs[1] = _VisibleSplatCount[0];
 }
 
 RWStructuredBuffer<SplatViewData> _SplatViewData;
@@ -258,11 +200,73 @@ bool IsSplatCut(float3 pos)
     return finalCut;
 }
 
+[numthreads(1,1,1)]
+void CSInitVisibleList (uint3 id : SV_DispatchThreadID)
+{
+    _VisibleSplatCount.Store(0, 0);
+    // DrawProceduralIndirect args: indexCountPerInstance, instanceCount,
+    // startIndexLocation, baseVertexLocation, startInstanceLocation
+    _DrawArgs[0] = 6;
+    _DrawArgs[1] = 0;
+    _DrawArgs[2] = 0;
+    _DrawArgs[3] = 0;
+    _DrawArgs[4] = 0;
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void CSCalcVisibility (uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= _SplatCount)
+        return;
+
+    float3 pos = LoadSplatPos(idx);
+    float3 centerWorldPos = mul(_MatrixObjectToWorld, float4(pos, 1)).xyz;
+    float4 centerClipPos = mul(UNITY_MATRIX_VP, float4(centerWorldPos, 1));
+
+    bool visible = centerClipPos.w > 0;
+    if (visible)
+    {
+        // conservative margin: splats whose center is somewhat outside the screen
+        // can still have a visible footprint; keep them until they are far off-screen
+        const float kFrustumMargin = 1.5;
+        float w = centerClipPos.w * kFrustumMargin;
+        visible = abs(centerClipPos.x) <= w && abs(centerClipPos.y) <= w;
+    }
+
+    // deleted splats are never visible
+    if (visible && _SplatBitsValid)
+    {
+        uint wordIdx = idx / 32;
+        uint bitIdx = idx & 31;
+        uint wordVal = _SplatDeletedBits.Load(wordIdx * 4);
+        if (wordVal & (1u << bitIdx))
+            visible = false;
+    }
+
+    // cutouts remove splats
+    if (visible && IsSplatCut(pos))
+        visible = false;
+
+    if (visible)
+    {
+        uint dst;
+        _VisibleSplatCount.InterlockedAdd(0, 1, dst);
+        _VisibleSplatIndices[dst] = idx;
+    }
+}
+
+[numthreads(1,1,1)]
+void CSWriteVisibleArgs (uint3 id : SV_DispatchThreadID)
+{
+    _DrawArgs[1] = _VisibleSplatCount.Load(0);
+}
+
 [numthreads(GROUP_SIZE,1,1)]
 void CSCalcViewData (uint3 id : SV_DispatchThreadID)
 {
     uint idx = id.x;
-    uint count = _CullingEnabled ? _VisibleSplatCount[0] : _SplatCount;
+    uint count = _CullingEnabled ? _VisibleSplatCount.Load(0) : _SplatCount;
     if (idx >= count)
         return;
 

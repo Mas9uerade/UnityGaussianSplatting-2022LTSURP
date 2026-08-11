@@ -507,7 +507,7 @@ namespace GaussianSplatting.Runtime
             m_GpuSortDistances = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, 4) { name = "GaussianSplatSortDistances" };
             m_GpuSortKeys = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, 4) { name = "GaussianSplatSortIndices" };
             m_GpuVisibleSplatIndices = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, 4) { name = "GaussianSplatVisibleSplatIndices" };
-            m_GpuVisibleCount = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 1, 4) { name = "GaussianSplatVisibleCount" };
+            m_GpuVisibleCount = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 1, 4) { name = "GaussianSplatVisibleCount" };
             m_GpuDrawArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, 4) { name = "GaussianSplatDrawArgs" };
             m_GpuDrawArgs.SetData(new uint[] { 6, 0, 0, 0, 0 });
 
