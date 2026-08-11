@@ -66,7 +66,11 @@ namespace GaussianSplatting.Runtime
                     return;
 
                 // 为每个泼溅对象添加排序、视图计算与绘制命令
-                Material matComposite = GaussianSplatRenderSystem.instance.SortAndRenderSplats(renderingData.cameraData.camera, m_Cmb);
+                // 使用 CameraData 的矩阵(与光栅化 UNITY_MATRIX_VP 同源),
+                // 避免 2022 URP 下直接读 Camera 组件矩阵得到非当前帧的值
+                Material matComposite = GaussianSplatRenderSystem.instance.SortAndRenderSplats(
+                    renderingData.cameraData.camera, m_Cmb,
+                    renderingData.cameraData.GetViewMatrix(), renderingData.cameraData.GetProjectionMatrix());
 
                 // 合成(仅两段式回退需要)
                 if (!m_Feature.m_EnableDirectRendering && matComposite != null)

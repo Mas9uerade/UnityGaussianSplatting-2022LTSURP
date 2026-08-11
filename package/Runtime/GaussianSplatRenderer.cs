@@ -107,6 +107,14 @@ namespace GaussianSplatting.Runtime
         // ReSharper disable once MemberCanBePrivate.Global - used by HDRP/URP features that are not always compiled
         public Material SortAndRenderSplats(Camera cam, CommandBuffer cmb)
         {
+            return SortAndRenderSplats(cam, cmb, cam.worldToCameraMatrix, cam.projectionMatrix);
+        }
+
+        // viewMatrix/projMatrix 由调用方传入:URP 路径应使用 CameraData 的矩阵
+        // (与光栅化的 UNITY_MATRIX_VP 同源),因为 2022 URP 下直接读 Camera 组件
+        // 的矩阵可能不是当前帧的值,导致排序/协方差错误
+        public Material SortAndRenderSplats(Camera cam, CommandBuffer cmb, Matrix4x4 viewMatrix, Matrix4x4 projMatrix)
+        {
             Material matComposite = null;
             foreach (var kvp in m_ActiveSplats)
             {
@@ -135,12 +143,12 @@ namespace GaussianSplatting.Runtime
                 bool motionGating = gs.m_EnableMotionGating;
                 bool needSplatUpdate = !motionGating || gs.NeedsSplatUpdate(cam, matrix, cutoutsChanged);
                 if (gs.m_EnableFrustumCulling && needSplatUpdate)
-                    gs.PrepareVisibleSplats(cmb, cam);
+                    gs.PrepareVisibleSplats(cmb, cam, viewMatrix, projMatrix);
                 bool doSort = (motionGating || gs.m_EnableFrustumCulling)
                     ? needSplatUpdate || (gs.m_SortNthFrame > 1 && gs.m_FrameCounter % gs.m_SortNthFrame == 0)
                     : gs.m_FrameCounter % gs.m_SortNthFrame == 0;
                 if (doSort && gs.m_EnableSorting)
-                    gs.SortPoints(cmb, cam, matrix);
+                    gs.SortPoints(cmb, cam, matrix, viewMatrix);
                 ++gs.m_FrameCounter;
 
                 // cache view
@@ -175,7 +183,7 @@ namespace GaussianSplatting.Runtime
 
                 cmb.BeginSample(s_ProfCalcView);
                 if (needSplatUpdate)
-                    gs.CalcViewData(cmb, cam);
+                    gs.CalcViewData(cmb, cam, viewMatrix, projMatrix);
                 cmb.EndSample(s_ProfCalcView);
                 gs.MarkSplatUpdateDone(cam, matrix);
 
@@ -398,6 +406,7 @@ namespace GaussianSplatting.Runtime
             public static readonly int BufferSize = Shader.PropertyToID("_BufferSize");
             public static readonly int MatrixMV = Shader.PropertyToID("_MatrixMV");
             public static readonly int MatrixP = Shader.PropertyToID("_MatrixP");
+            public static readonly int MatrixVP = Shader.PropertyToID("_MatrixVP");
             public static readonly int MatrixObjectToWorld = Shader.PropertyToID("_MatrixObjectToWorld");
             public static readonly int MatrixWorldToObject = Shader.PropertyToID("_MatrixWorldToObject");
             public static readonly int VecScreenParams = Shader.PropertyToID("_VecScreenParams");
@@ -686,14 +695,13 @@ namespace GaussianSplatting.Runtime
             DestroyImmediate(m_MatDebugBoxes);
         }
 
-        internal void CalcViewData(CommandBuffer cmb, Camera cam)
+        internal void CalcViewData(CommandBuffer cmb, Camera cam, Matrix4x4 matView, Matrix4x4 matProj)
         {
             if (cam.cameraType == CameraType.Preview)
                 return;
 
             var tr = transform;
 
-            Matrix4x4 matView = cam.worldToCameraMatrix;
             Matrix4x4 matO2W = tr.localToWorldMatrix;
             Matrix4x4 matW2O = tr.worldToLocalMatrix;
             int screenW = cam.pixelWidth, screenH = cam.pixelHeight;
@@ -709,7 +717,7 @@ namespace GaussianSplatting.Runtime
             cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, Props.VisibleSplatCount, m_GpuVisibleCount);
 
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixMV, matView * matO2W);
-            cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixP, cam.projectionMatrix);
+            cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixP, matProj);
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixObjectToWorld, matO2W);
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixWorldToObject, matW2O);
 
@@ -726,7 +734,7 @@ namespace GaussianSplatting.Runtime
 
         // 计算当前相机下哪些泼溅可见(视锥剔除、已删除、被剪裁体裁掉),
         // 把可见泼溅压入紧凑的可见索引表,并同步更新间接绘制参数。
-        internal void PrepareVisibleSplats(CommandBuffer cmb, Camera cam)
+        internal void PrepareVisibleSplats(CommandBuffer cmb, Camera cam, Matrix4x4 viewMatrix, Matrix4x4 projMatrix)
         {
             if (cam.cameraType == CameraType.Preview)
                 return;
@@ -743,6 +751,7 @@ namespace GaussianSplatting.Runtime
             cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcVisibility, Props.VisibleSplatIndices, m_GpuVisibleSplatIndices);
             cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcVisibility, Props.VisibleSplatCount, m_GpuVisibleCount);
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixObjectToWorld, matO2W);
+            cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixVP, projMatrix * viewMatrix);
             EnsureKernelSizes();
             cmb.DispatchCompute(m_CSSplatUtilities, (int)KernelIndices.CalcVisibility, (m_SplatCount + (int)m_CalcVisibilityGroupSizeX - 1)/(int)m_CalcVisibilityGroupSizeX, 1, 1);
 
@@ -751,12 +760,12 @@ namespace GaussianSplatting.Runtime
             cmb.DispatchCompute(m_CSSplatUtilities, (int)KernelIndices.WriteVisibleArgs, 1, 1, 1);
         }
 
-        internal void SortPoints(CommandBuffer cmd, Camera cam, Matrix4x4 matrix)
+        internal void SortPoints(CommandBuffer cmd, Camera cam, Matrix4x4 matrix, Matrix4x4 matView)
         {
             if (cam.cameraType == CameraType.Preview)
                 return;
 
-            Matrix4x4 worldToCamMatrix = cam.worldToCameraMatrix;
+            Matrix4x4 worldToCamMatrix = matView;
             worldToCamMatrix.m20 *= -1;
             worldToCamMatrix.m21 *= -1;
             worldToCamMatrix.m22 *= -1;

@@ -51,6 +51,7 @@ float4x4 _MatrixObjectToWorld;
 float4x4 _MatrixWorldToObject;
 float4x4 _MatrixMV;
 float4x4 _MatrixP;
+float4x4 _MatrixVP;
 float4 _VecScreenParams;
 float4 _VecWorldSpaceCameraPos;
 int _SelectionMode;
@@ -223,7 +224,7 @@ void CSCalcVisibility (uint3 id : SV_DispatchThreadID)
 
     float3 pos = LoadSplatPos(idx);
     float3 centerWorldPos = mul(_MatrixObjectToWorld, float4(pos, 1)).xyz;
-    float4 centerClipPos = mul(UNITY_MATRIX_VP, float4(centerWorldPos, 1));
+    float4 centerClipPos = mul(_MatrixVP, float4(centerWorldPos, 1));
 
     bool visible = centerClipPos.w > 0;
     if (visible)
