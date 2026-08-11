@@ -55,7 +55,10 @@ v2f vert (uint vtxID : SV_VertexID, uint instID : SV_InstanceID)
     v2f o = (v2f)0;
     instID = _OrderBuffer[instID];
 	SplatViewData view = _SplatViewData[instID];
-	float4 centerClipPos = view.pos;
+	// 实时计算中心裁剪坐标(与 DebugPoints 一致):顶点 shader 的 UNITY_MATRIX_VP
+	// 逐帧稳定,而预计算的 view.pos 在部分平台(2022 URP)上可能不稳定导致抖动
+	float3 centerWorldPos = mul(unity_ObjectToWorld, float4(LoadSplatPos(instID), 1)).xyz;
+	float4 centerClipPos = mul(UNITY_MATRIX_VP, float4(centerWorldPos, 1));
 	bool behindCam = centerClipPos.w <= 0;
 	if (behindCam)
 	{
