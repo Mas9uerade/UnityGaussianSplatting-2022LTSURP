@@ -397,6 +397,7 @@ namespace GaussianSplatting.Runtime
             public static readonly int DstBuffer = Shader.PropertyToID("_DstBuffer");
             public static readonly int BufferSize = Shader.PropertyToID("_BufferSize");
             public static readonly int MatrixMV = Shader.PropertyToID("_MatrixMV");
+            public static readonly int MatrixP = Shader.PropertyToID("_MatrixP");
             public static readonly int MatrixObjectToWorld = Shader.PropertyToID("_MatrixObjectToWorld");
             public static readonly int MatrixWorldToObject = Shader.PropertyToID("_MatrixWorldToObject");
             public static readonly int VecScreenParams = Shader.PropertyToID("_VecScreenParams");
@@ -692,6 +693,7 @@ namespace GaussianSplatting.Runtime
 
             var tr = transform;
 
+            Matrix4x4 matView = cam.worldToCameraMatrix;
             Matrix4x4 matO2W = tr.localToWorldMatrix;
             Matrix4x4 matW2O = tr.worldToLocalMatrix;
             int screenW = cam.pixelWidth, screenH = cam.pixelHeight;
@@ -706,6 +708,8 @@ namespace GaussianSplatting.Runtime
             cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, Props.VisibleSplatIndices, m_GpuVisibleSplatIndices);
             cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcViewData, Props.VisibleSplatCount, m_GpuVisibleCount);
 
+            cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixMV, matView * matO2W);
+            cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixP, cam.projectionMatrix);
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixObjectToWorld, matO2W);
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixWorldToObject, matW2O);
 
@@ -752,6 +756,11 @@ namespace GaussianSplatting.Runtime
             if (cam.cameraType == CameraType.Preview)
                 return;
 
+            Matrix4x4 worldToCamMatrix = cam.worldToCameraMatrix;
+            worldToCamMatrix.m20 *= -1;
+            worldToCamMatrix.m21 *= -1;
+            worldToCamMatrix.m22 *= -1;
+
             // calculate distance to the camera for each splat
             cmd.BeginSample(s_ProfSort);
             cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.SplatSortDistances, m_GpuSortDistances);
@@ -762,8 +771,8 @@ namespace GaussianSplatting.Runtime
             cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.SplatChunks, m_GpuChunks);
             cmd.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcDistances, Props.SplatPos, m_GpuPosData);
             cmd.SetComputeIntParam(m_CSSplatUtilities, Props.SplatFormat, (int)m_Asset.posFormat);
-            // 视图矩阵由 compute 侧使用内置 UNITY_MATRIX_V(与光栅化同源)
-            cmd.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixObjectToWorld, matrix);
+            // 显式传入 C# 视图矩阵,避免依赖 compute 内置矩阵(2022 URP 下可能滞后)
+            cmd.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixMV, worldToCamMatrix * matrix);
             cmd.SetComputeIntParam(m_CSSplatUtilities, Props.SplatCount, m_SplatCount);
             cmd.SetComputeIntParam(m_CSSplatUtilities, Props.SplatChunkCount, m_GpuChunksValid ? m_GpuChunks.count : 0);
             EnsureKernelSizes();
