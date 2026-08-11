@@ -61,6 +61,12 @@
 
 开关用 uniform 分支(`_CullingEnabled`)实现:同一 dispatch 内所有线程路径一致,无发散,无实质性能开销。开关切换(尤其剔除开→关/关→开)会触发一帧重算,之后回到正常状态。
 
+### 与透明物体的深度交互(可选,`m_EnableDepthWrite`)
+
+- 默认 splat `ZWrite Off` 且先于所有透明物体渲染,因此与透明物体没有深度联系(透明物体永远盖在 splat 上,即使它实际在 splat 后面)。
+- 开启 `GaussianSplatRenderer.m_EnableDepthWrite` 后,主 splat shader 通过材质属性 `ZWrite [_ZWrite]` 写入深度。由于 splat 按 back-to-front 排序,最终深度缓冲等于 splat 云每个像素的"最近 splat 前表面",之后渲染的透明物体会被正确遮挡/正确遮挡 splat。
+- 注意:共面/等深 splat 可能出现 z-fighting 或近 splat 四边形边缘的深度伪影;`m_SortNthFrame > 1` 时排序滞后也可能造成少量缺失;建议仅在需要与透明物体交互的场景开启。
+
 ## 未实现
 
 | 项 | 内容 | 预期收益 | 备注 |

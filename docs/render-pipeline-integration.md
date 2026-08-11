@@ -22,6 +22,10 @@ This means you _can_ have opaque objects inside the "gaussian scene", and the sp
 However this does not work the other way around - the gaussians do _not_ write into the Z buffer, and they are rendered before
 all transparencies. So they will not interact with "regular" semitransparent objects well.
 
+If you need transparent objects to be properly occluded by the gaussians, enable `GaussianSplatRenderer.m_EnableDepthWrite`.
+The splats then write their front surface into the depth buffer (back-to-front sort keeps the nearest splat's depth), so
+transparencies rendered afterwards get correct depth interaction. Watch out for z-fighting on coplanar splats.
+
 ### Are gaussians affected by lighting?
 
 No. No lights, shadows, reflection probes, lightmaps, skybox, any of that stuff.

@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: MIT
 Shader "Gaussian Splatting/Render Splats"
 {
+    Properties
+    {
+        // controlled per object at runtime via GaussianSplatRenderer.m_EnableDepthWrite
+        [Toggle] _ZWrite ("Write Depth", Float) = 0
+    }
+
     SubShader
     {
         Tags { "RenderType"="Transparent" "Queue"="Transparent" }
 
         Pass
         {
-            ZWrite Off
+            ZWrite [_ZWrite]
             Blend One OneMinusSrcAlpha
             Cull Off
             

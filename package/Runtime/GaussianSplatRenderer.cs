@@ -112,6 +112,7 @@ namespace GaussianSplatting.Runtime
             {
                 var gs = kvp.Item1;
                 gs.EnsureMaterials();
+                gs.m_MatSplats.SetFloat(Props.ZWrite, gs.m_EnableDepthWrite ? 1.0f : 0.0f);
                 matComposite = gs.m_MatComposite;
                 var mpb = kvp.Item2;
 
@@ -265,6 +266,8 @@ namespace GaussianSplatting.Runtime
         public bool m_EnableKernelSizeCache = true;
         [Tooltip("Upload cutout data to the GPU only when cutouts changed")]
         public bool m_EnableCutoutCaching = true;
+        [Tooltip("Write splats into the depth buffer, so transparent objects rendered afterwards are correctly occluded by the splats")]
+        public bool m_EnableDepthWrite;
 
         public RenderMode m_RenderMode = RenderMode.Splats;
         [Range(1.0f,15.0f)] public float m_PointDisplaySize = 3.0f;
@@ -366,6 +369,7 @@ namespace GaussianSplatting.Runtime
             public static readonly int VisibleSplatCount = Shader.PropertyToID("_VisibleSplatCount");
             public static readonly int DrawArgs = Shader.PropertyToID("_DrawArgs");
             public static readonly int CullingEnabled = Shader.PropertyToID("_CullingEnabled");
+            public static readonly int ZWrite = Shader.PropertyToID("_ZWrite");
             public static readonly int SrcBuffer = Shader.PropertyToID("_SrcBuffer");
             public static readonly int DstBuffer = Shader.PropertyToID("_DstBuffer");
             public static readonly int BufferSize = Shader.PropertyToID("_BufferSize");
