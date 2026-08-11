@@ -16,6 +16,9 @@
 #pragma kernel CSScaleSelection
 #pragma kernel CSExportData
 #pragma kernel CSCopySplats
+#pragma kernel CSInitVisibleList
+#pragma kernel CSCalcVisibility
+#pragma kernel CSWriteVisibleArgs
 
 // DeviceRadixSort
 #pragma multi_compile __ KEY_UINT KEY_INT KEY_FLOAT
@@ -48,6 +51,13 @@ RWStructuredBuffer<uint> _SplatSortDistances;
 RWStructuredBuffer<uint> _SplatSortKeys;
 uint _SplatCount;
 
+// GPU state for frustum culling (view-projection matrix passed explicitly from C#)
+float4x4 _MatrixVP;
+RWStructuredBuffer<uint> _VisibleSplatBits;
+RWByteAddressBuffer _VisibleSplatCount;
+RWStructuredBuffer<uint> _DrawArgs;
+uint _CullingEnabled;
+
 // radix sort etc. friendly, see http://stereopsis.com/radix.html
 uint FloatToSortableUint(float f)
 {
@@ -78,7 +88,17 @@ void CSCalcDistances (uint3 id : SV_DispatchThreadID)
     float3 pos = LoadSplatPos(origIdx);
     pos = mul(_MatrixMV, float4(pos.xyz, 1)).xyz;
 
-    _SplatSortDistances[idx] = FloatToSortableUint(pos.z);
+    uint key = FloatToSortableUint(pos.z);
+    if (_CullingEnabled)
+    {
+        // when culling is on, invisible splats get the maximum key so they sort
+        // to the end; the draw then only renders the visible count. Sorting stays
+        // full-size and deterministic
+        bool visible = (_VisibleSplatBits[idx >> 5] >> (idx & 31)) & 1u;
+        if (!visible)
+            key = 0xFFFFFFFFu;
+    }
+    _SplatSortDistances[idx] = key;
 }
 
 RWStructuredBuffer<SplatViewData> _SplatViewData;
@@ -187,11 +207,87 @@ bool IsSplatCut(float3 pos)
 }
 
 [numthreads(GROUP_SIZE,1,1)]
+void CSInitVisibleList (uint3 id : SV_DispatchThreadID)
+{
+    uint wordCount = (_SplatCount + 31) / 32;
+    if (id.x < wordCount)
+        _VisibleSplatBits[id.x] = 0;
+    if (id.x == 0)
+    {
+        _VisibleSplatCount.Store(0, 0);
+        // DrawProceduralIndirect args: indexCountPerInstance, instanceCount,
+        // startIndexLocation, baseVertexLocation, startInstanceLocation
+        _DrawArgs[0] = 6;
+        _DrawArgs[1] = 0;
+        _DrawArgs[2] = 0;
+        _DrawArgs[3] = 0;
+        _DrawArgs[4] = 0;
+    }
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void CSCalcVisibility (uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= _SplatCount)
+        return;
+
+    float3 pos = LoadSplatPos(idx);
+    float3 centerWorldPos = mul(_MatrixObjectToWorld, float4(pos, 1)).xyz;
+    float4 centerClipPos = mul(_MatrixVP, float4(centerWorldPos, 1));
+
+    bool visible = centerClipPos.w > 0;
+    if (visible)
+    {
+        // conservative margin: splats whose center is just outside the screen
+        // can still have a visible footprint
+        const float kFrustumMargin = 1.5;
+        float w = centerClipPos.w * kFrustumMargin;
+        visible = abs(centerClipPos.x) <= w && abs(centerClipPos.y) <= w;
+    }
+
+    // deleted splats are never visible
+    if (visible && _SplatBitsValid)
+    {
+        uint wordIdx = idx / 32;
+        uint bitIdx = idx & 31;
+        uint wordVal = _SplatDeletedBits.Load(wordIdx * 4);
+        if (wordVal & (1u << bitIdx))
+            visible = false;
+    }
+
+    // cutout removes splats
+    if (visible && IsSplatCut(pos))
+        visible = false;
+
+    if (visible)
+    {
+        _VisibleSplatBits[idx >> 5] |= 1u << (idx & 31);
+        uint dst;
+        _VisibleSplatCount.InterlockedAdd(0, 1, dst);
+    }
+}
+
+[numthreads(1,1,1)]
+void CSWriteVisibleArgs (uint3 id : SV_DispatchThreadID)
+{
+    _DrawArgs[1] = _VisibleSplatCount.Load(0);
+}
+
+[numthreads(GROUP_SIZE,1,1)]
 void CSCalcViewData (uint3 id : SV_DispatchThreadID)
 {
     uint idx = id.x;
     if (idx >= _SplatCount)
         return;
+
+    // when culling is on, skip invisible splats
+    if (_CullingEnabled)
+    {
+        bool visible = (_VisibleSplatBits[idx >> 5] >> (idx & 31)) & 1u;
+        if (!visible)
+            return;
+    }
 
     SplatData splat = LoadSplatData(idx);
     SplatViewData view = (SplatViewData)0;
