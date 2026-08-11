@@ -112,7 +112,7 @@ namespace GaussianSplatting.Runtime
             {
                 var gs = kvp.Item1;
                 gs.EnsureMaterials();
-                gs.m_MatSplats.SetFloat(Props.ZWrite, gs.m_EnableDepthWrite ? 1.0f : 0.0f);
+                gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.ZWrite, gs.m_EnableDepthWrite ? 1.0f : 0.0f);
                 matComposite = gs.m_MatComposite;
                 var mpb = kvp.Item2;
 
