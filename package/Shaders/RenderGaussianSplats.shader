@@ -31,6 +31,9 @@ CGPROGRAM
 #include "UnityCG.cginc"
 #include "GaussianSplatting.hlsl"
 
+// 混合数学模式(0 = 预乘线性,1 = 原版 gamma 累加),运行时由 m_EnableLegacyBlend 控制
+float _LegacyBlend;
+
 StructuredBuffer<uint> _OrderBuffer;
 
 struct v2f

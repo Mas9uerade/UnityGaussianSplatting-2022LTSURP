@@ -26,6 +26,9 @@ CGPROGRAM
 #pragma use_dxc
 #include "UnityCG.cginc"
 
+// 混合数学模式(0 = 预乘线性,1 = 原版 gamma 累加),运行时由 m_EnableLegacyBlend 控制
+float _LegacyBlend;
+
 struct v2f
 {
     float4 vertex : SV_POSITION;
