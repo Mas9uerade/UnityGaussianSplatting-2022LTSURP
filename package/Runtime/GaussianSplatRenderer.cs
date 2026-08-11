@@ -793,9 +793,11 @@ namespace GaussianSplatting.Runtime
         {
             if (m_FirstFrame || cutoutsChanged)
                 return true;
-            if (cam.worldToCameraMatrix != m_LastFrameViewMatrix ||
-                cam.projectionMatrix != m_LastFrameProjectionMatrix ||
-                matrix != m_LastFrameObjectMatrix)
+            // 使用带容差的比较:静态相机时组件矩阵可能因浮点重算在极小范围内抖动,
+            // 逐位精确比较会让门控每帧误触发、导致每帧重排序
+            if (!MatrixApproxEqual(cam.worldToCameraMatrix, m_LastFrameViewMatrix) ||
+                !MatrixApproxEqual(cam.projectionMatrix, m_LastFrameProjectionMatrix) ||
+                !MatrixApproxEqual(matrix, m_LastFrameObjectMatrix))
                 return true;
 
             int screenW = cam.pixelWidth, screenH = cam.pixelHeight;
@@ -813,6 +815,27 @@ namespace GaussianSplatting.Runtime
                 return true;
 
             return m_EditVersion != m_LastFrameEditVersion;
+        }
+
+        static bool MatrixApproxEqual(Matrix4x4 a, Matrix4x4 b)
+        {
+            const float eps = 1e-5f;
+            return Mathf.Abs(a.m00 - b.m00) <= eps * Mathf.Max(1f, Mathf.Abs(a.m00), Mathf.Abs(b.m00)) &&
+                   Mathf.Abs(a.m01 - b.m01) <= eps * Mathf.Max(1f, Mathf.Abs(a.m01), Mathf.Abs(b.m01)) &&
+                   Mathf.Abs(a.m02 - b.m02) <= eps * Mathf.Max(1f, Mathf.Abs(a.m02), Mathf.Abs(b.m02)) &&
+                   Mathf.Abs(a.m03 - b.m03) <= eps * Mathf.Max(1f, Mathf.Abs(a.m03), Mathf.Abs(b.m03)) &&
+                   Mathf.Abs(a.m10 - b.m10) <= eps * Mathf.Max(1f, Mathf.Abs(a.m10), Mathf.Abs(b.m10)) &&
+                   Mathf.Abs(a.m11 - b.m11) <= eps * Mathf.Max(1f, Mathf.Abs(a.m11), Mathf.Abs(b.m11)) &&
+                   Mathf.Abs(a.m12 - b.m12) <= eps * Mathf.Max(1f, Mathf.Abs(a.m12), Mathf.Abs(b.m12)) &&
+                   Mathf.Abs(a.m13 - b.m13) <= eps * Mathf.Max(1f, Mathf.Abs(a.m13), Mathf.Abs(b.m13)) &&
+                   Mathf.Abs(a.m20 - b.m20) <= eps * Mathf.Max(1f, Mathf.Abs(a.m20), Mathf.Abs(b.m20)) &&
+                   Mathf.Abs(a.m21 - b.m21) <= eps * Mathf.Max(1f, Mathf.Abs(a.m21), Mathf.Abs(b.m21)) &&
+                   Mathf.Abs(a.m22 - b.m22) <= eps * Mathf.Max(1f, Mathf.Abs(a.m22), Mathf.Abs(b.m22)) &&
+                   Mathf.Abs(a.m23 - b.m23) <= eps * Mathf.Max(1f, Mathf.Abs(a.m23), Mathf.Abs(b.m23)) &&
+                   Mathf.Abs(a.m30 - b.m30) <= eps * Mathf.Max(1f, Mathf.Abs(a.m30), Mathf.Abs(b.m30)) &&
+                   Mathf.Abs(a.m31 - b.m31) <= eps * Mathf.Max(1f, Mathf.Abs(a.m31), Mathf.Abs(b.m31)) &&
+                   Mathf.Abs(a.m32 - b.m32) <= eps * Mathf.Max(1f, Mathf.Abs(a.m32), Mathf.Abs(b.m32)) &&
+                   Mathf.Abs(a.m33 - b.m33) <= eps * Mathf.Max(1f, Mathf.Abs(a.m33), Mathf.Abs(b.m33));
         }
 
         internal void MarkSplatUpdateDone(Camera cam, Matrix4x4 matrix)
