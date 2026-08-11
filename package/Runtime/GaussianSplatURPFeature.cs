@@ -79,7 +79,9 @@ namespace GaussianSplatting.Runtime
             }
         }
 
-        [SerializeField] bool m_EnableDirectRendering = true;
+        // 默认关闭:与 legacy 混合数学(两段式)组合才是上游验证过的行为;
+        // 直绘模式仅配合实验性的预乘线性数学(即 m_EnableLegacyBlend = false)使用
+        [SerializeField] bool m_EnableDirectRendering = false;
         GSRenderPass m_Pass;
         bool m_HasCamera;
 

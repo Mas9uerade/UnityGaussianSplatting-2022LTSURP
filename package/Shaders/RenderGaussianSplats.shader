@@ -56,7 +56,8 @@ v2f vert (uint vtxID : SV_VertexID, uint instID : SV_InstanceID)
 	bool behindCam = centerClipPos.w <= 0;
 	if (behindCam)
 	{
-		o.vertex = asfloat(0x7fc00000); // NaN discards the primitive
+		// 零面积退化四边形:保证不产生片元,避免 NaN 顶点在不同驱动上的未定义行为
+		o.vertex = float4(0, 0, 0, 1);
 	}
 	else
 	{

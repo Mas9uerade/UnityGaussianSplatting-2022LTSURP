@@ -279,8 +279,8 @@ namespace GaussianSplatting.Runtime
         public bool m_EnableCutoutCaching = true;
         [Tooltip("Write splats into the depth buffer, so transparent objects rendered afterwards are correctly occluded by the splats")]
         public bool m_EnableDepthWrite;
-        [Tooltip("Use the original upstream blending math (gamma-space accumulation) instead of premultiplied linear")]
-        public bool m_EnableLegacyBlend;
+        [Tooltip("Use the original upstream blending math (gamma-space accumulation, verified by upstream). Disable only for the experimental premultiplied-linear mode")]
+        public bool m_EnableLegacyBlend = true;
 
         public RenderMode m_RenderMode = RenderMode.Splats;
         [Range(1.0f,15.0f)] public float m_PointDisplaySize = 3.0f;

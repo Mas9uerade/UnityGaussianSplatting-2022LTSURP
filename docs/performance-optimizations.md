@@ -44,9 +44,9 @@
 - 混合数学统一为**预乘线性**(`Blend One OneMinusSrcAlpha`,fragment 输出 `GammaToLinearSpace(color) * alpha`):
   - URP 直绘:splat 直接画进相机目标(带场景深度测试),不再需要全屏 `R16G16B16A16_SFloat` 中间 RT、clear 与全屏 blit;
   - BiRP/HDRP 两段式保持不变(中间 RT + 合成),合成 shader 简化为预乘 over(`float4(col.rgb, col.a)`),数学自洽。
-- URP 侧开关:`GaussianSplatURPFeature.m_EnableDirectRendering`(默认开;该开关在 URP 渲染器资产的 Feature 面板上,是相机级/全局的,无法像前几项一样做逐对象开关)。关闭时回退到两段式 RT + blit,便于 A/B。
+- URP 侧开关:`GaussianSplatURPFeature.m_EnableDirectRendering`(默认**关**;该开关在 URP 渲染器资产的 Feature 面板上,是相机级/全局的,无法像前几项一样做逐对象开关)。开启时直绘进相机目标,省去中间 RT + blit。
 - 收益:4K 下每帧省全屏 clear + RT 写入 + 读取 + 混合带宽(约 100–150 MB/帧)。
-- 注意:叠加空间从"gamma 累加后统一线性化"改为"逐 splat 线性化后混合"(更符合物理),与天空盒/外部物体的融合表现可能有细微差异,需重点回归。若要与上游逐像素对比,可开启组件上的 `m_EnableLegacyBlend` 恢复原版 gamma 数学。
+- **注意(默认组合)**:默认使用**两段式 + 原版 gamma 混合数学**(`m_EnableDirectRendering = false` + `m_EnableLegacyBlend = true`),与上游验证过的行为一致。实验性的预乘线性直绘(`m_EnableDirectRendering = true` + `m_EnableLegacyBlend = false`)在低精度目标上存在量化/精度回归风险,不作为默认。
 
 ### 运行时开关(提交 `b2c5eb8`)
 
@@ -58,11 +58,17 @@
 | `m_EnableFrustumCulling` | P1-4 | 全量排序、全量视图计算、`DrawProcedural` 全量绘制 |
 | `m_EnableKernelSizeCache` | P0-3a | 每帧重新查询 kernel 组大小 |
 | `m_EnableCutoutCaching` | P0-3b | 每帧全量上传 cutout 数据 |
-| `m_EnableLegacyBlend` | P1-5 混合数学 | 恢复原版 gamma 空间累加 + 合成时线性化的混合(默认关闭=预乘线性) |
+| `m_EnableLegacyBlend` | P1-5 混合数学 | **默认开** = 原版 gamma 空间累加 + 合成时线性化(上游验证);关闭 = 实验性预乘线性 |
 
 开关用 uniform 分支(`_CullingEnabled`)实现:同一 dispatch 内所有线程路径一致,无发散,无实质性能开销。开关切换(尤其剔除开→关/关→开)会触发一帧重算,之后回到正常状态。
 
 注:剔除关闭(`m_EnableFrustumCulling = false`)时,已删除/被剪裁的泼溅由 `CSCalcViewData` 恢复原版检查进行过滤,行为与上游一致。
+
+推荐的开关组合:
+
+- **默认(推荐)**:直绘关 + legacy 开 = 上游等价行为;
+- 性能优先(实验性):直绘开 + legacy 关 = 预乘线性直绘,注意精度回归风险;
+- 不要使用:直绘开 + legacy 开(原版数学只适配两段式)。
 
 ### 与透明物体的深度交互(可选,`m_EnableDepthWrite`)
 
