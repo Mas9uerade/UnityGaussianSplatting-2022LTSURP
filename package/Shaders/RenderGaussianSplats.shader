@@ -5,6 +5,11 @@ Shader "Gaussian Splatting/Render Splats"
     {
         // 运行时由 GaussianSplatRenderer.m_EnableDepthWrite 按对象控制
         [Toggle] _ZWrite ("Write Depth", Float) = 0
+        // 混合数学模式:0 = 预乘线性(默认),1 = 原版 gamma 累加
+        // 运行时由 GaussianSplatRenderer.m_EnableLegacyBlend 按对象控制
+        _LegacyBlend ("Legacy Blend", Float) = 0
+        [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Source Blend", Float) = 1
+        [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend ("Dest Blend", Float) = 6
     }
 
     SubShader
@@ -14,7 +19,7 @@ Shader "Gaussian Splatting/Render Splats"
         Pass
         {
             ZWrite [_ZWrite]
-            Blend One OneMinusSrcAlpha
+            Blend [_SrcBlend] [_DstBlend]
             Cull Off
             
 CGPROGRAM
@@ -115,8 +120,11 @@ half4 frag (v2f i) : SV_Target
     if (alpha < 1.0/255.0)
         discard;
 
-    // 输出预乘线性颜色:既能直接与场景混合,也能在两段式的中间渲染纹理中正确累加
-    half4 res = half4(GammaToLinearSpace(i.col.rgb) * alpha, alpha);
+    // 预乘线性(默认):既能直接与场景混合,也能在两段式的中间渲染纹理中正确累加;
+    // 原版模式:gamma 空间颜色直接输出,由合成阶段统一线性化(与上游行为一致)
+    half4 res = _LegacyBlend != 0
+        ? half4(i.col.rgb * alpha, alpha)
+        : half4(GammaToLinearSpace(i.col.rgb) * alpha, alpha);
     return res;
 }
 ENDCG

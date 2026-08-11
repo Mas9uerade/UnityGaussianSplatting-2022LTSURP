@@ -280,6 +280,22 @@ void CSCalcViewData (uint3 id : SV_DispatchThreadID)
     half opacityScale = _SplatOpacityScale;
     float splatScale = _SplatScale;
 
+    // 剔除关闭时,可见性 pass 不会过滤已删除/被剪裁的泼溅,
+    // 这里恢复原版的检查(置 w=0 使其被丢弃);剔除开启时由可见性 pass 处理
+    if (!_CullingEnabled)
+    {
+        if (_SplatBitsValid)
+        {
+            uint wordIdx = origIdx / 32;
+            uint bitIdx = origIdx & 31;
+            uint wordVal = _SplatDeletedBits.Load(wordIdx * 4);
+            if (wordVal & (1u << bitIdx))
+                centerClipPos.w = 0;
+        }
+        if (IsSplatCut(splat.pos))
+            centerClipPos.w = 0;
+    }
+
     view.pos = centerClipPos;
     bool behindCam = centerClipPos.w <= 0;
     if (!behindCam)

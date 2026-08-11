@@ -113,6 +113,17 @@ namespace GaussianSplatting.Runtime
                 var gs = kvp.Item1;
                 gs.EnsureMaterials();
                 gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.ZWrite, gs.m_EnableDepthWrite ? 1.0f : 0.0f);
+                // 混合数学开关:预乘线性(默认)或原版 gamma 累加
+                gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.LegacyBlend, gs.m_EnableLegacyBlend ? 1.0f : 0.0f);
+                gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.SrcBlend,
+                    (float)(gs.m_EnableLegacyBlend ? BlendMode.OneMinusDstAlpha : BlendMode.One));
+                gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.DstBlend,
+                    (float)(gs.m_EnableLegacyBlend ? BlendMode.One : BlendMode.OneMinusSrcAlpha));
+                gs.m_MatComposite.SetFloat(GaussianSplatRenderer.Props.LegacyBlend, gs.m_EnableLegacyBlend ? 1.0f : 0.0f);
+                gs.m_MatComposite.SetFloat(GaussianSplatRenderer.Props.SrcBlend,
+                    (float)(gs.m_EnableLegacyBlend ? BlendMode.SrcAlpha : BlendMode.One));
+                gs.m_MatComposite.SetFloat(GaussianSplatRenderer.Props.DstBlend,
+                    (float)BlendMode.OneMinusSrcAlpha);
                 matComposite = gs.m_MatComposite;
                 var mpb = kvp.Item2;
 
@@ -268,6 +279,8 @@ namespace GaussianSplatting.Runtime
         public bool m_EnableCutoutCaching = true;
         [Tooltip("Write splats into the depth buffer, so transparent objects rendered afterwards are correctly occluded by the splats")]
         public bool m_EnableDepthWrite;
+        [Tooltip("Use the original upstream blending math (gamma-space accumulation) instead of premultiplied linear")]
+        public bool m_EnableLegacyBlend;
 
         public RenderMode m_RenderMode = RenderMode.Splats;
         [Range(1.0f,15.0f)] public float m_PointDisplaySize = 3.0f;
@@ -370,6 +383,9 @@ namespace GaussianSplatting.Runtime
             public static readonly int DrawArgs = Shader.PropertyToID("_DrawArgs");
             public static readonly int CullingEnabled = Shader.PropertyToID("_CullingEnabled");
             public static readonly int ZWrite = Shader.PropertyToID("_ZWrite");
+            public static readonly int LegacyBlend = Shader.PropertyToID("_LegacyBlend");
+            public static readonly int SrcBlend = Shader.PropertyToID("_SrcBlend");
+            public static readonly int DstBlend = Shader.PropertyToID("_DstBlend");
             public static readonly int SrcBuffer = Shader.PropertyToID("_SrcBuffer");
             public static readonly int DstBuffer = Shader.PropertyToID("_DstBuffer");
             public static readonly int BufferSize = Shader.PropertyToID("_BufferSize");
