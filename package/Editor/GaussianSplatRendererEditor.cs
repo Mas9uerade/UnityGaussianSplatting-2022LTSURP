@@ -32,6 +32,7 @@ namespace GaussianSplatting.Editor
         SerializedProperty m_PropEnableKernelSizeCache;
         SerializedProperty m_PropEnableCutoutCaching;
         SerializedProperty m_PropEnableDepthWrite;
+        SerializedProperty m_PropEnableDepthTest;
         SerializedProperty m_PropEnableLegacyBlend;
         SerializedProperty m_PropRenderMode;
         SerializedProperty m_PropPointDisplaySize;
@@ -78,6 +79,7 @@ namespace GaussianSplatting.Editor
             m_PropEnableKernelSizeCache = serializedObject.FindProperty("m_EnableKernelSizeCache");
             m_PropEnableCutoutCaching = serializedObject.FindProperty("m_EnableCutoutCaching");
             m_PropEnableDepthWrite = serializedObject.FindProperty("m_EnableDepthWrite");
+            m_PropEnableDepthTest = serializedObject.FindProperty("m_EnableDepthTest");
             m_PropEnableLegacyBlend = serializedObject.FindProperty("m_EnableLegacyBlend");
             m_PropRenderMode = serializedObject.FindProperty("m_RenderMode");
             m_PropPointDisplaySize = serializedObject.FindProperty("m_PointDisplaySize");
@@ -130,6 +132,7 @@ namespace GaussianSplatting.Editor
             EditorGUILayout.PropertyField(m_PropEnableKernelSizeCache);
             EditorGUILayout.PropertyField(m_PropEnableCutoutCaching);
             EditorGUILayout.PropertyField(m_PropEnableDepthWrite);
+            EditorGUILayout.PropertyField(m_PropEnableDepthTest);
             EditorGUILayout.PropertyField(m_PropEnableLegacyBlend);
 
             EditorGUILayout.Space();

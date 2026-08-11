@@ -58,6 +58,7 @@
 | `m_EnableFrustumCulling` | P1-4 | 全量排序、全量视图计算、`DrawProcedural` 全量绘制 |
 | `m_EnableKernelSizeCache` | P0-3a | 每帧重新查询 kernel 组大小 |
 | `m_EnableCutoutCaching` | P0-3b | 每帧全量上传 cutout 数据 |
+| `m_EnableDepthTest` | 绘制 | 关闭后 splat 忽略深度测试(ZTest Always),用于排查深度缓冲相关闪烁 |
 | `m_EnableLegacyBlend` | P1-5 混合数学 | **默认开** = 原版 gamma 空间累加 + 合成时线性化(上游验证);关闭 = 实验性预乘线性 |
 
 开关用 uniform 分支(`_CullingEnabled`)实现:同一 dispatch 内所有线程路径一致,无发散,无实质性能开销。开关切换(尤其剔除开→关/关→开)会触发一帧重算,之后回到正常状态。

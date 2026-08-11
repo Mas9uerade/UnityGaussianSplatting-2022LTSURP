@@ -113,6 +113,8 @@ namespace GaussianSplatting.Runtime
                 var gs = kvp.Item1;
                 gs.EnsureMaterials();
                 gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.ZWrite, gs.m_EnableDepthWrite ? 1.0f : 0.0f);
+                gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.ZTest,
+                    (float)(gs.m_EnableDepthTest ? CompareFunction.LessEqual : CompareFunction.Always));
                 // 混合数学开关:预乘线性(默认)或原版 gamma 累加
                 gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.LegacyBlend, gs.m_EnableLegacyBlend ? 1.0f : 0.0f);
                 gs.m_MatSplats.SetFloat(GaussianSplatRenderer.Props.SrcBlend,
@@ -279,6 +281,8 @@ namespace GaussianSplatting.Runtime
         public bool m_EnableCutoutCaching = true;
         [Tooltip("Write splats into the depth buffer, so transparent objects rendered afterwards are correctly occluded by the splats")]
         public bool m_EnableDepthWrite;
+        [Tooltip("Test splats against the scene depth buffer. Disable to isolate depth-buffer related flicker")]
+        public bool m_EnableDepthTest = true;
         [Tooltip("Use the original upstream blending math (gamma-space accumulation, verified by upstream). Disable only for the experimental premultiplied-linear mode")]
         public bool m_EnableLegacyBlend = true;
 
@@ -383,6 +387,7 @@ namespace GaussianSplatting.Runtime
             public static readonly int DrawArgs = Shader.PropertyToID("_DrawArgs");
             public static readonly int CullingEnabled = Shader.PropertyToID("_CullingEnabled");
             public static readonly int ZWrite = Shader.PropertyToID("_ZWrite");
+            public static readonly int ZTest = Shader.PropertyToID("_ZTest");
             public static readonly int LegacyBlend = Shader.PropertyToID("_LegacyBlend");
             public static readonly int SrcBlend = Shader.PropertyToID("_SrcBlend");
             public static readonly int DstBlend = Shader.PropertyToID("_DstBlend");

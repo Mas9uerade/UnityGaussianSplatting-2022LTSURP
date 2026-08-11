@@ -5,6 +5,8 @@ Shader "Gaussian Splatting/Render Splats"
     {
         // 运行时由 GaussianSplatRenderer.m_EnableDepthWrite 按对象控制
         [Toggle] _ZWrite ("Write Depth", Float) = 0
+        // 深度测试模式,运行时由 GaussianSplatRenderer.m_EnableDepthTest 控制
+        [Enum(UnityEngine.Rendering.CompareFunction)] _ZTest ("ZTest", Float) = 4
         // 混合数学模式:0 = 预乘线性(默认),1 = 原版 gamma 累加
         // 运行时由 GaussianSplatRenderer.m_EnableLegacyBlend 按对象控制
         _LegacyBlend ("Legacy Blend", Float) = 0
@@ -19,6 +21,7 @@ Shader "Gaussian Splatting/Render Splats"
         Pass
         {
             ZWrite [_ZWrite]
+            ZTest [_ZTest]
             Blend [_SrcBlend] [_DstBlend]
             Cull Off
             
