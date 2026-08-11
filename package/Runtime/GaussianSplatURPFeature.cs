@@ -35,13 +35,7 @@ namespace GaussianSplatting.Runtime
 
             public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
             {
-                if (m_Feature.m_EnableDirectRendering)
-                {
-                    // draw splats directly into the camera target, blended over the scene
-                    ConfigureTarget(m_Renderer.cameraColorTargetHandle, m_Renderer.cameraDepthTargetHandle);
-                    ConfigureClear(ClearFlag.None, Color.clear);
-                }
-                else
+                if (!m_Feature.m_EnableDirectRendering)
                 {
                     // two-stage fallback: splats go into an intermediate RT, composited afterwards
                     RenderTextureDescriptor rtDesc = renderingData.cameraData.cameraTargetDescriptor;
@@ -51,9 +45,22 @@ namespace GaussianSplatting.Runtime
                     RenderingUtils.ReAllocateIfNeeded(ref m_RenderTarget, rtDesc, FilterMode.Point, TextureWrapMode.Clamp, name: GaussianSplatRTName);
                     cmd.SetGlobalTexture(m_RenderTarget.name, m_RenderTarget.nameID);
 
-                    ConfigureTarget(m_RenderTarget, m_Renderer.cameraDepthTargetHandle);
+                    // cameraDepthTargetHandle can be null on some platforms/setups during
+                    // OnCameraSetup; only bind it when available
+                    var depthHandle = m_Renderer.cameraDepthTargetHandle;
+                    if (depthHandle != null)
+                        ConfigureTarget(m_RenderTarget, depthHandle);
+                    else
+                        ConfigureTarget(m_RenderTarget);
                     ConfigureClear(ClearFlag.Color, new Color(0, 0, 0, 0));
                 }
+
+                // Direct rendering mode: do not configure any render targets here. The
+                // renderer binds the current camera color/depth for passes that do not
+                // override the target, so splats are drawn directly into the camera
+                // target and depth-tested against the scene. Accessing
+                // cameraColorTargetHandle / cameraDepthTargetHandle in OnCameraSetup can
+                // return null on some platforms and throw inside ConfigureTarget.
             }
 
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
