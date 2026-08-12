@@ -330,7 +330,6 @@ namespace GaussianSplatting.Runtime
             public static readonly int VisibleSplatCount = Shader.PropertyToID("_VisibleSplatCount");
             public static readonly int DrawArgs = Shader.PropertyToID("_DrawArgs");
             public static readonly int CullingEnabled = Shader.PropertyToID("_CullingEnabled");
-            public static readonly int MatrixVP = Shader.PropertyToID("_MatrixVP");
             public static readonly int SrcBuffer = Shader.PropertyToID("_SrcBuffer");
             public static readonly int DstBuffer = Shader.PropertyToID("_DstBuffer");
             public static readonly int BufferSize = Shader.PropertyToID("_BufferSize");
@@ -456,7 +455,7 @@ namespace GaussianSplatting.Runtime
 
             m_GpuSortDistances = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, 4) { name = "GaussianSplatSortDistances" };
             m_GpuSortKeys = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, 4) { name = "GaussianSplatSortIndices" };
-            m_GpuVisibleSplatBits = new GraphicsBuffer(GraphicsBuffer.Target.Structured, (count + 31) / 32, 4) { name = "GaussianSplatVisibleBits" };
+            m_GpuVisibleSplatBits = new GraphicsBuffer(GraphicsBuffer.Target.Raw, (count + 31) / 32, 4) { name = "GaussianSplatVisibleBits" };
             m_GpuVisibleCount = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 1, 4) { name = "GaussianSplatVisibleCount" };
             m_GpuDrawArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 5, 4) { name = "GaussianSplatDrawArgs" };
             m_GpuDrawArgs.SetData(new uint[] { 6, 0, 0, 0, 0 });
@@ -667,7 +666,6 @@ namespace GaussianSplatting.Runtime
             cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcVisibility, Props.VisibleSplatBits, m_GpuVisibleSplatBits);
             cmb.SetComputeBufferParam(m_CSSplatUtilities, (int)KernelIndices.CalcVisibility, Props.VisibleSplatCount, m_GpuVisibleCount);
             cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixObjectToWorld, matO2W);
-            cmb.SetComputeMatrixParam(m_CSSplatUtilities, Props.MatrixVP, cam.projectionMatrix * cam.worldToCameraMatrix);
             m_CSSplatUtilities.GetKernelThreadGroupSizes((int)KernelIndices.CalcVisibility, out uint gsX, out _, out _);
             cmb.DispatchCompute(m_CSSplatUtilities, (int)KernelIndices.CalcVisibility, (m_SplatCount + (int)gsX - 1)/(int)gsX, 1, 1);
 

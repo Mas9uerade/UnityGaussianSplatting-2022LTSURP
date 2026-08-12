@@ -51,9 +51,8 @@ RWStructuredBuffer<uint> _SplatSortDistances;
 RWStructuredBuffer<uint> _SplatSortKeys;
 uint _SplatCount;
 
-// GPU state for frustum culling (view-projection matrix passed explicitly from C#)
-float4x4 _MatrixVP;
-RWStructuredBuffer<uint> _VisibleSplatBits;
+// GPU state for frustum culling
+RWByteAddressBuffer _VisibleSplatBits;
 RWByteAddressBuffer _VisibleSplatCount;
 RWStructuredBuffer<uint> _DrawArgs;
 uint _CullingEnabled;
@@ -96,7 +95,7 @@ void CSCalcDistances (uint3 id : SV_DispatchThreadID)
         // full-size and deterministic
         // note: check visibility of the splat whose distance we compute (origIdx),
         // not the sort position idx - _SplatSortKeys holds the previous frame's order
-        bool visible = (_VisibleSplatBits[origIdx >> 5] >> (origIdx & 31)) & 1u;
+        bool visible = (_VisibleSplatBits.Load((origIdx >> 5) * 4) >> (origIdx & 31)) & 1u;
         if (!visible)
             key = 0xFFFFFFFFu;
     }
@@ -213,7 +212,7 @@ void CSInitVisibleList (uint3 id : SV_DispatchThreadID)
 {
     uint wordCount = (_SplatCount + 31) / 32;
     if (id.x < wordCount)
-        _VisibleSplatBits[id.x] = 0;
+        _VisibleSplatBits.Store(id.x * 4, 0);
     if (id.x == 0)
     {
         _VisibleSplatCount.Store(0, 0);
@@ -236,7 +235,9 @@ void CSCalcVisibility (uint3 id : SV_DispatchThreadID)
 
     float3 pos = LoadSplatPos(idx);
     float3 centerWorldPos = mul(_MatrixObjectToWorld, float4(pos, 1)).xyz;
-    float4 centerClipPos = mul(_MatrixVP, float4(centerWorldPos, 1));
+    // use the same built-in VP as CSCalcViewData so the visibility test matches
+    // the clip positions that are actually drawn
+    float4 centerClipPos = mul(UNITY_MATRIX_VP, float4(centerWorldPos, 1));
 
     bool visible = centerClipPos.w > 0;
     if (visible)
@@ -264,7 +265,10 @@ void CSCalcVisibility (uint3 id : SV_DispatchThreadID)
 
     if (visible)
     {
-        _VisibleSplatBits[idx >> 5] |= 1u << (idx & 31);
+        // InterlockedOr: atomic per-bit write (plain |= is a racy read-modify-write
+        // when multiple threads in the same group write the same word)
+        uint oldVal;
+        _VisibleSplatBits.InterlockedOr((idx >> 5) * 4, 1u << (idx & 31), oldVal);
         uint dst;
         _VisibleSplatCount.InterlockedAdd(0, 1, dst);
     }
@@ -286,7 +290,7 @@ void CSCalcViewData (uint3 id : SV_DispatchThreadID)
     // when culling is on, skip invisible splats
     if (_CullingEnabled)
     {
-        bool visible = (_VisibleSplatBits[idx >> 5] >> (idx & 31)) & 1u;
+        bool visible = (_VisibleSplatBits.Load((idx >> 5) * 4) >> (idx & 31)) & 1u;
         if (!visible)
             return;
     }
