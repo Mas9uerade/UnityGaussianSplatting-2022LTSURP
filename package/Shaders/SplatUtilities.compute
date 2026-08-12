@@ -94,7 +94,9 @@ void CSCalcDistances (uint3 id : SV_DispatchThreadID)
         // when culling is on, invisible splats get the maximum key so they sort
         // to the end; the draw then only renders the visible count. Sorting stays
         // full-size and deterministic
-        bool visible = (_VisibleSplatBits[idx >> 5] >> (idx & 31)) & 1u;
+        // note: check visibility of the splat whose distance we compute (origIdx),
+        // not the sort position idx - _SplatSortKeys holds the previous frame's order
+        bool visible = (_VisibleSplatBits[origIdx >> 5] >> (origIdx & 31)) & 1u;
         if (!visible)
             key = 0xFFFFFFFFu;
     }
